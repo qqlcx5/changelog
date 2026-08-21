@@ -13,6 +13,15 @@
 | `activity-log-prompt.md` | 个人多维活动日志 + 知识复盘子模板 |
 | `auto-changelog-prompt.md` | 自动整合对话内容 → 写入本目录 → 提交的元提示词 |
 
+## 自动整合规则
+
+本仓库的"对话内容 → 落盘 → 提交"流程由全局用户规则驱动：
+
+`C:\Users\t-liaochunxin\.agents\rules\auto-changelog.md`
+
+该规则是给 AI 的指令：在对话中检测到可复用的提示词/模板/调研结论时，
+自动整合到本仓库并提交。它**不会**在对话结束后自动触发，需 AI 在对话内主动执行。
+
 ## 来源
 
 - changelog-generator 技能（ComposioHQ / 鱼皮AI导航）
