@@ -69,6 +69,7 @@ onLaunch(async (options) => {
 - `src/api/login.ts` 增加 `dingLogin({code})` → `POST /auth/dingLogin`。
 - `src/store/token.ts` 增加 `dingLogin()`：先 `getAuthCode()` 拿 code → `_dingLogin({code})` → `_postLogin(res)`。
 - 登录页/工作台进入时（isDingTalk 且未登录）调用 `tokenStore.dingLogin()` 即可自动免登。
+- 实战：在 `src/pages/auth/login.vue` 的 `onLoad` 里判断 `isDingTalk() && !tokenStore.hasLogin` 自动 `doDingLogin()`；模板另加「钉钉免登」按钮（`v-if="isDingTalk()"`）供手动触发。注意 `onLoad` 执行前 App.vue 的 `bootstrapDing()` 应已完成 `dd.config`，`dingLogin` 内部 `getAuthCode` 会经 `ensureDing()` 等 `dd.ready`。
 
 ## 4. 后端示例（Node 零依赖，server/ding-server-example.mjs）
 
