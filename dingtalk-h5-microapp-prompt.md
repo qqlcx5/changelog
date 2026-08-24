@@ -76,7 +76,11 @@ onLaunch(async (options) => {
 - `GET /api/ding/jsapi-sign?url=`：gettoken → get_jsapi_ticket（带缓存）→ SHA1 拼接签名返回。
 - `POST /api/ding/login`：body `{code}` → gettoken → `topapi/v2/user/getuserinfo` 换 `userid`；真实项目在此用 userid 查/建自家用户并签发登录态。
 
-运行：`node server/ding-server-example.mjs`，依赖环境变量 `DING_CORP_ID / DING_AGENT_ID / DING_APP_KEY / DING_APP_SECRET`。
+运行（Node >= 20.6，用 `--env-file` 读密钥）：
+```
+node --env-file=server/ding-server.env server/ding-server-example.mjs
+```
+密钥放 `server/ding-server.env`（`DING_CORP_ID/DING_AGENT_ID/DING_APP_KEY/DING_APP_SECRET`），该文件被 `server/.gitignore` 排除（`*.env`），**真实 AppSecret 不会进 git**。实战已验证：用真实 AppSecret 起服务后，`GET /api/ding/jsapi-sign?url=...` 正常返回 `timeStamp/nonceStr/signature`，说明 gettoken→get_jsapi_ticket→SHA1 链路通。
 
 签名算法（服务端）：
 ```js
@@ -94,5 +98,6 @@ const signature = crypto.createHash('sha1').update(raw).digest('hex')
 
 1. 报"没有权限/未鉴权" → 调 scan/选图/选人前没做 dd.config。
 2. 报"签名错误/invalid signature" → 前后端 url 不一致（是否含 #hash、是否编码）、ticket 过期、timestamp 单位不对。
-3. AppSecret 只在后台「凭证与基础信息」查看时显示一次，务必保存完整值（不是 `****` 打码版）。
+3. AppSecret 只在后台「凭证与基础信息」查看时显示一次，务必保存完整值（不是 `****` 打码版）。落盘时放 `server/ding-server.env` 并用 `server/.gitignore` 排除 `*.env`，避免提交泄露。
 4. 新模型（UUID App ID + Client ID/Secret）接口与老模型不通用，别混用。
+5. 启动多实例会 `EADDRINUSE: :::3001`（端口被占用）——先 `Stop-Process -Name node` 清理残留再起。
