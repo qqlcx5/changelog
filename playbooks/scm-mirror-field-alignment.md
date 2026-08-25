@@ -1,3 +1,14 @@
+---
+id: PB-20260825-001
+type: playbook
+title: SCM 镜像页前端字段口径对齐清单
+tags: [qcm-v2, protable, field-mapping]
+status: verified
+source: conversation:2026-08-25
+created: 2026-08-25
+updated: 2026-08-25
+---
+
 # SCM 镜像页面前端字段口径对齐清单（QCM V2 / jp-ui）
 
 > 适用：外部系统（SCM/XLS 等）推送数据落库后，在 jp-ui 做只读镜像展示页（ProTable 列表）。

@@ -1,3 +1,14 @@
+---
+id: PR-20260821-002
+type: prompt
+title: 个人活动日志提示词集
+tags: [activity-log, journal, retro]
+status: draft
+source: web-collected:2026-08-21
+created: 2026-08-21
+updated: 2026-08-21
+---
+
 # 个人活动日志提示词
 
 记录"做了什么 / 查了什么 / 问了什么 / 想了什么"等多维度个人活动，

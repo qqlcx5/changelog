@@ -1,3 +1,14 @@
+---
+id: PB-20260825-002
+type: playbook
+title: Windows PATH 被 setx 覆盖后的恢复
+tags: [windows, setx, registry, vss]
+status: verified
+source: conversation:2026-08-25
+created: 2026-08-25
+updated: 2026-08-25
+---
+
 # Windows PATH 被 setx 覆盖后的恢复工作流（实战手册）
 
 > 来源：2026-08-25 实战案例。用户误执行 `setx PATH "D:\Program Files\nvm\nodejs;D:\JDK\bin"`，

@@ -1,3 +1,16 @@
+---
+id: PR-20260821-003
+type: prompt
+title: 自动整合提示词（v1 元提示词，已被 WORKFLOW.md 取代）
+tags: [meta, automation, history]
+status: verified
+source: conversation:2026-08-21
+created: 2026-08-21
+updated: 2026-08-21
+---
+
+> 注：本文件描述的 v1 流程已被仓库根 WORKFLOW.md（v2 契约）取代，保留作历史参考。
+
 # 自动整合提示词（Auto-Changelog Prompt）
 
 用途：当用户在对话中收集/整理了若干内容（如 changelog 提示词、活动日志模板），

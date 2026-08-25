@@ -1,3 +1,14 @@
+---
+id: PR-20260821-001
+type: prompt
+title: Changelog 生成提示词集
+tags: [changelog, git, release-notes]
+status: draft
+source: web-collected:2026-08-21
+created: 2026-08-21
+updated: 2026-08-21
+---
+
 # Changelog 生成提示词
 
 从 git 历史、提交记录或手动粘贴的要点，自动产出用户友好的变更说明。

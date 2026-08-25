@@ -1,3 +1,14 @@
+---
+id: PB-20260824-001
+type: playbook
+title: uniapp 接入钉钉 H5 微应用（JSAPI + 免登）
+tags: [uniapp, dingtalk, jsapi, auth]
+status: verified
+source: conversation:2026-08-24
+created: 2026-08-24
+updated: 2026-08-24
+---
+
 # uniapp 接入钉钉 H5 微应用（企业内部应用 / 老模型）
 
 > 适用：uniapp / unibest 脚手架，做钉钉工作台内的 H5 微应用，需要 JSAPI 鉴权（扫一扫、选图片、选人、定位）+ 免登。
