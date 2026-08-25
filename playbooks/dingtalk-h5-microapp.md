@@ -6,7 +6,7 @@ tags: [uniapp, dingtalk, jsapi, auth]
 status: verified
 source: conversation:2026-08-24
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 # uniapp 接入钉钉 H5 微应用（企业内部应用 / 老模型）
@@ -113,3 +113,37 @@ const signature = crypto.createHash('sha1').update(raw).digest('hex')
 3. AppSecret 只在后台「凭证与基础信息」查看时显示一次，务必保存完整值（不是 `****` 打码版）。落盘时放 `server/ding-server.env` 并用 `server/.gitignore` 排除 `*.env`，避免提交泄露。
 4. 新模型（UUID App ID + Client ID/Secret）接口与老模型不通用，别混用。
 5. 启动多实例会 `EADDRINUSE: :::3001`（端口被占用）——先 `Stop-Process -Name node` 清理残留再起。
+6. union API（chooseImage/chooseMedia/previewMedia）**需要** dd.config（不像 requestAuthCode 免登），且 `jsApiList` 里必须填去前缀名（`chooseImage` 而非 `union.chooseImage`），否则鉴权不过。
+7. `IUnion*` 系列类型从 `dingtalk-jsapi/api/union/<name>` 子路径导入，包入口（`export = dd`）不导出。
+
+## 7. 媒体选择与预览（union API：chooseImage / chooseMedia / previewMedia）
+
+> 场景：钉钉 H5 里选图片 / 选视频（相册或录制），再预览播放。用 union 系列（挂在 `dd` 根上，返回 Promise），不要用老 `biz.util.*` 回调版。
+
+### 7.1 调用签名（dingtalk-jsapi v1.x）
+
+| API | 入参要点 | 返回 |
+|---|---|---|
+| `dd.chooseImage({ count, sourceType })` | count≤9；`sourceType: ['album','camera']` | `{ files: [{ path, size, fileType }] }` |
+| `dd.chooseMedia({ count, camera, sizeType, mediaType, sourceType, maxDuration })` | 选视频 `mediaType:'video'`；`sizeType:'compressed'`（string，不是数组） | `{ tempFiles: [{ tempFilePath, size, width, height, duration, fileType }] }` |
+| `dd.previewMedia({ current, sources:[{url,type,poster?}], showmenu })` | `sources.type` 取 `'image'\|'video'`，可混合 | `{}`（钉钉原生图片预览/视频播放器） |
+
+- chooseImage / chooseMedia 返回本地临时路径，可直接喂给 `<image>` / `<video>` 组件。
+- previewMedia 的 `sources` 可混合图片与视频，`current` 指定起始项，实现"多图多视频画廊播放"。
+
+### 7.2 与 dd.config 的配合
+- union API 的 `jsApiList` 项必须**去掉 `union.` 前缀**（对照包内 `constant/apiMapping.d.ts`）。
+- 实操：`apis` 列表每项加 `jsName` 字段，`jsApiList: apis.map(i => i.jsName ?? i.name)`。
+
+### 7.3 浏览器回退（H5 调试）
+钉钉容器判定 `dd.env.platform !== 'notInDingTalk'`；非钉钉时回退 uni API，普通浏览器即可调试同一页面：
+- chooseImage → `uni.chooseImage({ count })`（返回 `tempFilePaths`）
+- chooseMedia → `uni.chooseVideo({ sourceType, maxDuration })`（返回 `tempFilePath`）
+- 图片预览 → `uni.previewImage`；视频用页面内 `<video controls>` 播本地路径（无需全屏 API）
+
+### 7.4 类型导入坑
+包入口 `export = dd`，**不导出** `IUnion*Result` 等类型，需子路径导入：
+```ts
+import type { IUnionChooseImageResult } from 'dingtalk-jsapi/api/union/chooseImage'
+import type { IUnionChooseMediaResult } from 'dingtalk-jsapi/api/union/chooseMedia'
+```
