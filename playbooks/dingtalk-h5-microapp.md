@@ -160,4 +160,9 @@ import type { IUnionChooseMediaResult } from 'dingtalk-jsapi/api/union/chooseMed
 2. **调用层（dd.config 的 jsApiList 声明）**：见第 2、7 节——未声明会报"没有权限"；union 系列填去前缀名。
 
 排查顺序：后台权限已开通 → jsApiList 已声明正确名称 → 后端签名（timeStamp/nonceStr/signature）正确（见 ERR-20260826-001）。注意 errorCode 9「无效的随机字符串参数」是**签名**问题不是权限问题，别误判成权限未开。
+
+## 9. 本地联调注意（最易踩的运行期坑）
+- **签名服务必须常驻**：前端 `ensureConfig` 每次调用需鉴权 JSAPI 前都要 `fetch(/api/ding/jsapi-sign)`，服务没起就报网络错/errorCode 9。启动命令 `node --env-file=server/ding-server.env server/ding-server-example.mjs`（监听 :3001）。别把它和 `pnpm dev`（前端）混淆——两者是两个独立进程。
+- **容器内 localhost ≠ 开发机**：`VITE_DING_JSAPI_SIGN_API=http://localhost:3001/...` 仅在「开发者电脑 + 钉钉 PC 客户端打开本地 H5 微应用」成立。手机/钉钉真机容器内 `localhost` 指向设备自身，访问不到开发机服务 → 改成开发机局域网 IP（如 `http://192.168.x.x:3001`）或内网穿透（ngrok/frpc）。
+- **签名 url 一致性**：`dd.config` 签名用的 url 必须等于当前页面地址（去 `#`hash）。前端用 `location.href.split('#')[0]` 传给服务即可，勿硬编码固定 url。
 ```
