@@ -6,7 +6,7 @@ tags: [uniapp, dingtalk, jsapi, auth]
 status: verified
 source: conversation:2026-08-24
 created: 2026-08-24
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 
 # uniapp 接入钉钉 H5 微应用（企业内部应用 / 老模型）
@@ -146,4 +146,18 @@ const signature = crypto.createHash('sha1').update(raw).digest('hex')
 ```ts
 import type { IUnionChooseImageResult } from 'dingtalk-jsapi/api/union/chooseImage'
 import type { IUnionChooseMediaResult } from 'dingtalk-jsapi/api/union/chooseMedia'
+```
+
+## 8. 后台接口权限申请（两层鉴权）
+
+> 调用 JSAPI 报"没有权限/未鉴权"要分两层排查，不要只盯 dd.config。
+
+1. **应用层（开发者后台开通）**：应用需在「开发者后台 → 应用 → 权限管理 → 接口权限(JSAPI)」勾选/申请对应接口。常见要求：
+   - 基础能力（toast/alert/confirm/openLink/setTitle/chooseDateTime/chooseImage/chooseMedia/previewMedia 等媒体与 UI）：企业内部应用大多默认可用，仍建议后台确认已勾选。
+   - 通讯录类（complexPicker / biz.contact.choose）：需"通讯录读权限"，必须申请。
+   - 定位（getGeolocation）：需"获取地理位置"权限，需申请。
+   - 免登（requestAuthCode）：企业内部应用默认开通，无需单独申请。
+2. **调用层（dd.config 的 jsApiList 声明）**：见第 2、7 节——未声明会报"没有权限"；union 系列填去前缀名。
+
+排查顺序：后台权限已开通 → jsApiList 已声明正确名称 → 后端签名（timeStamp/nonceStr/signature）正确（见 ERR-20260826-001）。注意 errorCode 9「无效的随机字符串参数」是**签名**问题不是权限问题，别误判成权限未开。
 ```
