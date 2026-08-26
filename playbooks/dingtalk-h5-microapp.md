@@ -191,3 +191,41 @@ import type { IUnionChooseMediaResult } from 'dingtalk-jsapi/api/union/chooseMed
 ### 10.3 现场诊断清单（真机）
 
 页内内置诊断面板，输出：UA、URL 中 corpid、dd.env、dd.version、`window.__useNativeSDK` / `window.__ddSDK` 注入状态、签名接口地址、签名 URL（去 hash）、timeStamp/nonceStr/signature 是否已填。配合钉钉官方 H5 远程调试工具（open-dev.dingtalk.com → api-tools → debug/h5，npm 包 dingtalk-h5-remote-debug）在真机实时看 Console 与 Network。dd.error 回调的完整 JSON（errorCode/errorMessage）是定位移动端鉴权失败的第一手证据，别只看弹窗文案。
+
+## 11. 钉钉逻辑从 .vue 页面抽离到独立 .ts 模块（重构模式）
+
+> 场景：demo 页面里钉钉鉴权/环境检测逻辑越堆越大（470+ 行），要抽成可复用模块（如 `src/utils/dingtalk/`：env.ts 环境检测 + config.ts 鉴权 + index.ts 出口），供正式业务页引用。
+
+### 11.1 硬约束：条件编译引用链
+
+- dingtalk-jsapi 及 window/navigator/location 等浏览器 API **只能在 H5 构建图内**；
+- 抽出的 .ts 模块内部**无需**再写 `// #ifdef H5`（跟随引用方进入构建图），但**页面里的 import 必须包在 `// #ifdef H5` 块内**——非 H5 构建时 import 被条件编译删除，模块不会进产物；
+- 模块文件头注释显式声明「仅限 H5 平台引用」，防止后续有人在非 H5 代码里误引；
+- 先例：uniapp 项目 .ts 文件里 `// #ifdef` 条件编译是官方支持的（interceptor.ts / useEcharts.ts 等均有使用）。
+
+### 11.2 抽离职责划分
+
+| 模块 | 职责 | 关键导出 |
+|---|---|---|
+| env.ts | 纯环境检测（不持状态） | isInDingTalk / isPcPlatform / getCorpIdFromUrl / buildDingEnvDiagnostic(input) |
+| config.ts | 鉴权状态机（模块级单例） | dingConfig / SIGN_API / loadSignature / ensureConfig(jsApiList) / isConfigured |
+| 页面 | demo 交互与展示 | apis 注册表 + apiCallers 映射 + 响应式状态镜像 |
+
+要点：
+- **configured 状态单一事实源放 config.ts（模块级变量 + isConfigured() getter）**，页面 ref 只做展示镜像（doConfig 的 finally 里 `configured.value = isConfigured()`），避免两份状态漂移；
+- 诊断函数设计成**纯函数** `buildDingEnvDiagnostic(input)`，input 接收页面状态快照（configured/corpId/agentId/signApi/signFilled），检测逻辑与响应式状态解耦；
+- corpId/agentId 移入 `env/.env`（VITE_DING_CORP_ID / VITE_DING_AGENT_ID）+ env.d.ts 类型声明，页面不再硬编码；**前端 env 永不放 clientSecret**（原页面遗留的 oauth 死代码对象含 secret，直接删除）。
+
+### 11.3 验证门禁（重构后必跑）
+
+```bash
+# 1. 严格模式 lint（antfu config 在编辑器环境会禁用部分规则，须 CI=true）
+CI=true pnpm exec eslint src/utils/dingtalk/*.ts src/pages/dingtalk/dingtalk.vue
+# 2. 类型检查（对比基线错误数，不新增即可）
+pnpm type-check
+# 3. H5 构建验证条件编译链（若项目有预存在构建失败，确认报错不在本次改动文件即可）
+pnpm build:h5
+```
+
+坑：IDE 的 TS 语言服务对新建模块会误报「xxx 不是模块」（缓存未刷新），以命令行 `pnpm type-check` 结果为准。
+
