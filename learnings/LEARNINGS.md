@@ -22,3 +22,23 @@
 
 ### Resolution
 2026-08-26 在 qcmV2 的 ProTable.vue 中将 allFields 与 getQueryParams 的判断从 `schemaContract.value?.queries?.length` 收敛为 `schemaContract.value`：queries 为空时不渲染搜索区、请求不带 conditions；组件 README 生效规则表同步补注。
+
+---
+
+## [LRN-20260826-002] Jackson 序列化 key 与 Spring MVC 绑定 key 对连续大写开头字段不一致
+
+**Logged**: 2026-08-26T17:24:12 | **Status**: pending | **Tags**: jackson, spring, java-beans, binding
+**See Also**: PB-20260825-001
+
+### Summary
+Java 字段第二字符大写（如 `jAmsea`）且无 `@JsonProperty` 时，Jackson 序列化的响应 key（`jamsea`）与 Spring MVC GET 参数绑定期望的 key（`JAmsea`）是两个值，前端按响应 key 提交查询会静默绑定失败。
+
+### Details
+- Jackson 对 getter `getJAmsea()` 按连续大写开头整体小写化 mangle → 响应 key `jamsea`；
+- Spring MVC 数据绑定走 JavaBeans `Introspector.decapitalize`：前两字符均大写时保留原名 → 绑定 key `JAmsea`；
+- 两层规则差异在字段无显式 `@JsonProperty` 覆盖时暴露；
+- 症状隐蔽：不报错不 500，仅查询条件不生效（QueryWrapperGenerator 反射取到 null 后跳过该条件）；
+- 排查手段：对照实体 getter 推导两层 key；`git log` 确认历史上字段改名是否前后端同步。
+
+### Suggested Action
+前端双 key 分离：提交 key 用 JavaBeans 属性名（`JAmsea`），显示 key 用序列化 key（`row.jamsea`）；或后端加 `@JsonProperty` 显式统一两层口径（需评估历史报文兼容）。

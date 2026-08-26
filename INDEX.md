@@ -20,7 +20,7 @@
 | id | title | status | tags | updated | path |
 |---|---|---|---|---|---|
 | PB-20260824-001 | uniapp 接入钉钉 H5 微应用（JSAPI + 免登） | verified | uniapp,dingtalk,jsapi,auth | 2026-08-26 | playbooks/dingtalk-h5-microapp.md |
-| PB-20260825-001 | SCM 镜像页前端字段口径对齐清单 | verified | qcm-v2,protable,field-mapping | 2026-08-25 | playbooks/scm-mirror-field-alignment.md |
+| PB-20260825-001 | QCM V2 镜像页前端字段口径对齐清单（SCM & MDP） | verified | qcm-v2,protable,field-mapping,jackson | 2026-08-26 | playbooks/scm-mirror-field-alignment.md |
 | PB-20260825-002 | Windows PATH 被 setx 覆盖后的恢复 | verified | windows,setx,registry,vss | 2026-08-25 | playbooks/windows-path-recovery.md |
 <!-- END:playbooks -->
 
@@ -30,6 +30,6 @@
 | track | file | entries | updated |
 |---|---|---|---|
 | errors | learnings/ERRORS.md | 1 | 2026-08-26 |
-| learnings | learnings/LEARNINGS.md | 1 | 2026-08-26 |
+| learnings | learnings/LEARNINGS.md | 2 | 2026-08-26 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 <!-- END:learnings -->

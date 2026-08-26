@@ -1,18 +1,18 @@
 ---
 id: PB-20260825-001
 type: playbook
-title: SCM 镜像页前端字段口径对齐清单
-tags: [qcm-v2, protable, field-mapping]
+title: QCM V2 镜像页前端字段口径对齐清单（SCM & MDP）
+tags: [qcm-v2, protable, field-mapping, jackson]
 status: verified
 source: conversation:2026-08-25
 created: 2026-08-25
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 
-# SCM 镜像页面前端字段口径对齐清单（QCM V2 / jp-ui）
+# QCM V2 镜像页前端字段口径对齐清单（SCM & MDP / jp-ui）
 
-> 适用：外部系统（SCM/XLS 等）推送数据落库后，在 jp-ui 做只读镜像展示页（ProTable 列表）。
-> 本文为可直接复用的落地核对清单，来源于 SCM采购入退库（scmPurchaseStock）两轮对齐实战，兄弟页面 scmPurchaseOrder 同口径。
+> 适用：外部系统（SCM/XLS/MDP 等）推送数据落库后，在 jp-ui 做只读镜像展示页（ProTable 列表）。
+> 本文为可直接复用的落地核对清单，来源于 SCM采购入退库（scmPurchaseStock）两轮对齐实战（兄弟页面 scmPurchaseOrder 同口径），MDP 商品主数据（productMasterData）实战补充 1.1 变体。
 
 ## 1. 三条字段名口径（SCM 实体固定模式）
 
@@ -23,6 +23,17 @@ updated: 2026-08-25
 | 查询绑定参数 | Spring MVC 绑定用驼峰（`@Query` 字段） | 有搜索的列 `field` 取驼峰，保证搜索提交 key 能被绑定 |
 | 响应 JSON key | `@JsonProperty` 指定报文全大写 | 有搜索的列必须加 `formatter: ({ row }) => row.BILLID ?? ""` 从全大写 key 取值；无搜索的列 `field` 直接用全大写 key |
 | 非报文字段 | 无 `@JsonProperty`（派生字段、BaseEntity 审计字段 createUserName/createTime 等） | 响应 key 即驼峰，`field` 直接用驼峰，无需 formatter |
+
+### 1.1 MDP 变体：无 @JsonProperty 驼峰实体 + 连续大写开头字段（jAmsea 模式）
+
+MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 key 与驼峰字段同名，`field` 直接用驼峰即可；唯一例外是**第二字符大写**的字段（如季节 `jAmsea`），绑定 key 与响应 key 分裂成两套：
+
+| 层 | 推导规则 | jAmsea 的 key |
+|----|---------|--------------|
+| 响应 JSON（Jackson 序列化） | getter `getJAmsea()` 连续大写开头整体小写化 | `jamsea` |
+| GET 查询绑定（Spring MVC） | JavaBeans `Introspector.decapitalize`：前两字符均大写保留原样 | `JAmsea` |
+
+前端双 key 分离写法：列 `field: "JAmsea"`（搜索提交 key 能被绑定）+ `formatter: ({ row }) => row.jamsea ?? ""`（从响应 key 取显示值）。注意：QueryWrapperGenerator 已改为按 Field 反射取值，此类字段查询不再抛 500，失败症状是**静默不生效**，更难发现；若前端历史上改过字段名 key，先 `git log` 确认后端是否同步改过。
 
 ## 2. 列集合对齐原则：列 = 聚合 SQL 实际返回列
 
@@ -44,7 +55,7 @@ updated: 2026-08-25
 
 ## 5. 新建镜像页核对清单
 
-1. 读后端实体：标出 `@Query` 字段（搜索白名单）与 `@JsonProperty`（响应 key 口径）；
+1. 读后端实体：标出 `@Query` 字段（搜索白名单）与 `@JsonProperty`（响应 key 口径）；无 `@JsonProperty` 时按 1.1 节检查连续大写开头字段的双 key 分裂；
 2. 读 Mapper XML 聚合 SQL：列集合以 SELECT 实际返回列为准，注意 SUM / GROUP_CONCAT / MAX 口径并在列注释标明；
 3. ProTable 列定义按第 1 节三口径写 field / formatter；
 4. 菜单挂「主数据管理」一级菜单（menu_code='masterData'），前端路径 `views/md/scmXxx/`、API `api/md/scmXxxService.js`、菜单 href `/md/scmXxx`（不存在「采购管理」一级菜单）；
@@ -56,3 +67,4 @@ updated: 2026-08-25
 2. 按实体全字段配列而接口是聚合 SQL → 聚合不返回的列恒空白。
 3. 无 `@Query` 的字段配搜索 → 输入无任何过滤效果。
 4. 派生字段误当报文字段用全大写 key 取值 → 空白（非报文字段响应 key 是驼峰）。
+5. 连续大写开头字段（如 `jAmsea`）前端统一用序列化 key（`jamsea`）作 field → 显示正常但搜索提交 key 绑定不上，筛选静默失效（须按 1.1 节双 key 分离）。
