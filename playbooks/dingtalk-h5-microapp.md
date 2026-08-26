@@ -166,3 +166,28 @@ import type { IUnionChooseMediaResult } from 'dingtalk-jsapi/api/union/chooseMed
 - **容器内 localhost ≠ 开发机**：`VITE_DING_JSAPI_SIGN_API=http://localhost:3001/...` 仅在「开发者电脑 + 钉钉 PC 客户端打开本地 H5 微应用」成立。手机/钉钉真机容器内 `localhost` 指向设备自身，访问不到开发机服务 → 改成开发机局域网 IP（如 `http://192.168.x.x:3001`）或内网穿透（ngrok/frpc）。
 - **签名 url 一致性**：`dd.config` 签名用的 url 必须等于当前页面地址（去 `#`hash）。前端用 `location.href.split('#')[0]` 传给服务即可，勿硬编码固定 url。
 ```
+
+## 10. 移动端 vs PC 端：dd.config 鉴权链路差异（真机报「agentId 不能为空」排查）
+
+> 场景：PC 钉钉 dd.config 正常，手机钉钉（从工作台微应用入口打开、URL 带 corpid）报「agentId 不能为空」，且前端参数里 agentId 有值、签名接口实测返回正常。说明错误来自原生/服务端侧校验，不是前端参数真为空。
+
+### 10.1 机制差异（dingtalk-jsapi 3.2.9 源码结论）
+
+| | PC 端 | 移动端（Android/iOS） |
+|---|---|---|
+| authMethod | `config` | `runtime.permission.requestJsApis` |
+| 桥 | top window 消息（h5Pc） | nuva（Android）/ WebViewJavascriptBridge（iOS） |
+| url 字段 | SDK 自动附加 `url=location.href.split('#')[0]` 传给容器校验 | 不传 url，原生侧用容器当前 URL 参与校验 |
+| 新版容器 | — | 可能注入 `window.__useNativeSDK=true` + `window.__ddSDK`，此时 `dd.config` 走的是原生实现而非 npm 包逻辑 |
+
+推论：PC 端鉴权完全由「传入参数」驱动（url 也是显式传入，所以宽松）；移动端鉴权由「原生容器上下文 + 容器侧 URL」参与，对签名 URL 一致性和容器上下文更敏感——同一份代码 PC 成功不代表移动端链路一致。
+
+### 10.2 三个确定性代码坑（逐个排查）
+
+1. **后端返回空串覆盖前端默认值**：`if (data.agentId != null) dingConfig.agentId = data.agentId` —— 后端漏配时返回 `agentId: ''`，空串照样覆盖本地默认值 → 传给钉钉的真的是空。corpId/agentId 都要用 truthy 判断（`if (data.agentId)`）。
+2. **dd.config 一次性（hadConfig 保护）**：同一页面生命周期内第二次 `dd.config` 被静默忽略，**复用第一次的参数与结果**。失败后无论重试多少次、重新拉多少次签名，收到的永远是第一次的旧错误；改完任何配置必须刷新页面。前端应维护 attempted 标记，重复触发时直接提示「请刷新页面后重试」。
+3. **签名 URL 与移动端容器 URL 严格一致（含端口号，官方原话）**：hash 路由下 `location.href.split('#')[0]` 跨页面稳定；若仍失败，用页内诊断面板打出签名 URL 与手机容器实际 URL 逐一比对（含 query 参数顺序与编码）。
+
+### 10.3 现场诊断清单（真机）
+
+页内内置诊断面板，输出：UA、URL 中 corpid、dd.env、dd.version、`window.__useNativeSDK` / `window.__ddSDK` 注入状态、签名接口地址、签名 URL（去 hash）、timeStamp/nonceStr/signature 是否已填。配合钉钉官方 H5 远程调试工具（open-dev.dingtalk.com → api-tools → debug/h5，npm 包 dingtalk-h5-remote-debug）在真机实时看 Console 与 Network。dd.error 回调的完整 JSON（errorCode/errorMessage）是定位移动端鉴权失败的第一手证据，别只看弹窗文案。
