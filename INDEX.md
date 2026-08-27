@@ -23,6 +23,7 @@
 | PB-20260825-001 | QCM V2 镜像页前端字段口径对齐清单（SCM & MDP） | verified | qcm-v2,protable,field-mapping,jackson | 2026-08-26 | playbooks/scm-mirror-field-alignment.md |
 | PB-20260825-002 | Windows PATH 被 setx 覆盖后的恢复 | verified | windows,setx,registry,vss | 2026-08-25 | playbooks/windows-path-recovery.md |
 | PB-20260827-001 | DeepSeek Harness 设计哲学 · 思维框架 | draft | deepseek-harness,architecture,design-philosophy,cordis | 2026-08-27 | playbooks/harness-design-philosophy.md |
+| PB-20260827-002 | 通用架构哲学 · 思维框架（可移植版） | draft | architecture,design-philosophy,capability-seam,dependency-inversion | 2026-08-27 | playbooks/generic-architecture-philosophy.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
