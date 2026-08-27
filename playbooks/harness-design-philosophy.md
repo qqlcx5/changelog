@@ -11,7 +11,7 @@ updated: 2026-08-27
 
 # DeepSeek Harness 设计哲学 · 思维框架
 
-> 蒸馏自 deepseek-harness 仓库文档（AGENTS.md / docs/architecture.md / cordis-primer / capability-seams / defensive-patterns / testing / packages/AGENTS.md）。用于在该 harness 中做设计决策、加能力、改扩展点、评审架构时调用。完整版 agent skill 存于 `deepseek-harness/.agents/skills/harness-framework/`。
+> 蒸馏自 deepseek-harness 仓库文档（AGENTS.md / docs/architecture.md / cordis-primer / capability-seams / defensive-patterns / testing / packages/AGENTS.md）。用于在该 harness 中做设计决策、加能力、改扩展点、评审架构、写文档/Agent Note、选测试与推送前检查时调用。完整版 agent skill 存于 `deepseek-harness/.agents/skills/harness-framework/`（2026-08-27 已与原 `dsh-harness-framework` skill 合并，并入命令速查、反模式、价值排序、文档纪律、MM10-12）。
 
 ## 框架概览
 
@@ -54,22 +54,87 @@ updated: 2026-08-27
 ### MM9 — 地基优于兼容壳（发布前姿态）
 - 无外部消费者时优先正确地基而非兼容垫片。可自由重命名/重打包但要把每个引用一起更新。后端拒绝旧的磁盘格式；schema 版本单调。
 
+### MM10 — 双层 Scope 模型
+- 贡献分 global 与 scoped 两级，scoped 不向下继承；live agent 是自身 scope 的 key（对象身份比较）。
+- 做 per-agent 变体/工具限制/persona 用 scope 机制而非全局判断；subtree 行为用 lineage 数据表达，不用 scope 结构。
+
+### MM11 — 工具执行管线
+- 工具调用经 pre-execute（waterfall）→ guards（单调，deny or abstain）→ approval（缺省 deny）→ execute（around dispatch）→ 工具体 → post-execute → 归一化 → finalizeContent → result 的受守护管线。
+- 跨工具家族策略（权限/超时/审批/上下文注入）挂 waterfall/guards，不写死在单个工具里。
+
+### MM12 — 防御模式（bug 类规则）
+- 真实出过事的缺陷类：正交结果独立报告、公共契约双端遵守、异步状态不是同步状态、Dispose 须达静默、回调异常隔离、环境 scrubbed、链接形路径 unlink。
+- 写生命周期/并发/子进程/teardown 前必读 `docs/defensive-patterns.md`。
+
 ## 决策启发式（Decision Heuristics）
 
+### 架构与设计
 - 要加新能力 → 先画 SD/Provider/Consumer 三角；为所有当前 Consumer 设计 SD。
 - 某物会到达模型 → 加一条会话事件，确保能从日志重建。
 - 要改 `agent-loop` → 先更新 `docs/architecture.md`，再动代码。
-- 引入可变开关/默认 → 做成 `Config` 字段，别用 `?? default` 藏进 `run()`。
+- 引入可变开关/默认 → 做成 `Config` 字段 + 显式 `resolve(request): Spec`，别用 `?? default` 藏进 `run()`。
 - 跨边界 id → 用 `Branded<B>`，不用裸 `string`。
-- 校验该不该加 → 在 7 类边界加；同进程类型化值不加。
-- 写 teardown → `kill → await done`，先关注册表。
-- 非平凡改动 → 同 PR 写 Agent Note；改了过时行为要改其测试。
+- 错误配置 fail loud：自包含配置 load 时失败，否则最早可解析点失败；绝不静默跳过缺失引用。
 - 新行为 → 挂到文档化扩展点；不确定有没有扩展点就先查 `docs/architecture.md`。
+
+### 代码与边界
+- 校验该不该加 → 在 7 类边界加；同进程类型化值不加。
+- 空 catch 必须命名：说明吞掉什么、为何其他异常到不了这里；try 只包一条语句。
+- 运行时 invariant 断言**拥有的关系**（权威事件流/可变数据），不检查服务存在性/插件元数据/固定纯样例。
+- 可选依赖用 `ctx.get(name)`，不靠 `ctx.<name>` 属性代理。
+- 平行值要对称；无法解释的非对称通常意味着漏了一个抽取。
+
+### 测试
 - 测试策略 → 真实入口路径 + 无 key 快照覆盖模型/协议/人可见输出 + 验证"世界"而非自报。
+- 测试选最小相关集；覆盖率聚焦受影响源（`--coverage.include='packages/<g>/<p>/src/**/*.ts'`，禁 `--passWithNoTests`/压低阈值/收窄 include）。
+- 边界作用在完整结果上：字节/token/条目/时间限制在完整 emit 值处强制。
+- 状态只在提交点发布：操作成功后才发通知/更新派生状态。
+
+### 文档与推送
+- 非平凡改动 → 同 PR 写 Agent Note；改了过时行为要改其测试并解释。
+- 文档是变更的一部分：行为改变同步更新 README 与 JSDoc；`ts type-equiv` 粘贴块在 manifest 注册。
+- 历史改写必须 lease 保护：`--force-with-lease=<branch>:<observed-oid>`，裸 `--force` 永不使用。
+- 本地失败先修再推，不"push and hope"。
+
+## 命令速查
+
+| 场景 | 命令 |
+|------|------|
+| 安装（含钩子） | `pnpm install` |
+| 类型检查 | `pnpm run typecheck` |
+| 构建 | `pnpm run build` / `pnpm run build:official` |
+| 文档同步门禁 | `pnpm run doc-sync` |
+| 全套本地门禁 | `pnpm run check:all` |
+| e2e | `pnpm run test:e2e`（需 DEEPSEEK_API_KEY，无 key self-skip） |
+| 单测+覆盖率 | `pnpm exec vitest run <tests/file.spec.ts> --coverage --coverage.include='packages/<g>/<p>/src/**/*.ts'` |
+| 变更范围 | `pnpm --silent run change-scope --base <ref>` |
+
+## 反模式（Avoid）
+
+- 用 TS interface 定义 Service Definition（须 abstract class 或 concrete registry）。
+- 让一个 Consumer 独裁服务契约；公共服务方法只有一个内部调用者。
+- 直接改 core/agent-loop 而不找扩展点；改了不更新 `docs/architecture.md`。
+- 跳过 Agent Note 的非平凡变更；编辑已归档的 note。
+- 模型可见产物写在不进日志的地方。
+- mock 优先于真实实现；断言自报告而非世界效果。
+- 反射性全量跑测试。
+- 提交点前发通知/更新状态；派生数据各自维护副本。
+- 空 catch；凭据环境传给 spawn；可预测路径存 temp/spill 文件。
+- 递归 rmSync 删 symlink/junction；裸 `--force` push。
+- 文档与代码漂移（type-equiv 未注册、manifest 未更新、双语不对齐）。
+- 类型边界加运行时校验；wire/持久化 id 用裸 string。
+- 在 `run()` 内隐藏默认值；错误配置静默跳过。
+- PR 缺 kind/area label；TODO/FIXME/XXX 不按紧急度标记。
+
+## 价值排序
+
+1. **可验证性**：一切判断可被 gate/测试/日志验证。
+2. **可逆性**：注册即 effect，所有变更可 dispose/回滚。
+3. **显式性**：声明式、可 grep，优于隐式魔法。
+4. **最小表面**：只为当前消费者设计，不预设未来。
+5. **文档纪律**：决策、文档、代码三者同步。
 
 ## 流派 / 张力对比（Schools & Tensions）
-
-本哲学内部存在可命名的张力，决策时常在两端之间权衡：
 
 | 张力 | 一端 | 另一端 | 默认落点 |
 |---|---|---|---|
@@ -84,7 +149,7 @@ updated: 2026-08-27
 
 ## 应用工作流（设计决策协议）
 
-1. **归类**：能力 / 扩展点 / 生命周期 / 配置？对应 MM1–MM9 哪条？
+1. **归类**：能力 / 扩展点 / 生命周期 / 配置？对应 MM1–MM12 哪条？
 2. **找扩展点**：查 `docs/architecture.md`，确认有没有现成扩展点能承载；没有才考虑 spine 改动（并同步文档）。
 3. **画三角**：若是能力，列 SD / Provider / Consumer，确认每角归属与当前 Consumer 证据。
 4. **查模型可见性**：会出现在 prompt/tool/结果里吗？会 → 加会话事件，确保可重建。
@@ -92,6 +157,13 @@ updated: 2026-08-27
 6. **想善终**：有生命周期/并发 → 按 `docs/defensive-patterns.md` 设计到静默的销毁与正交上报。
 7. **验世界**：规划测试——真实入口路径 + 无 key 快照 + 世界验证；同 PR 补 Agent Note。
 8. **对称自查**：平行值是否对称？非对称是否意味着漏了一个抽取？
+9. **过门禁**：按变更面选最小检查（见命令速查），文档/契约变更跑 `doc-sync`；本地失败先修再推。
+
+## 文档与 Agent Note 纪律
+
+- **文档分级**：先判断读者与用途再选层级；避免 slop（空话/过度营销）；注意字数预算；双语 `.zh.md` 结构逐节对应、token 保持英文原样。
+- **`ts type-equiv`**：粘贴源码等价声明用 ` ```ts type-equiv ` 围栏 + 在 `scripts/type-equiv.manifest.json` 注册 symbol；类实现体不进 catalog 用 ` ```ts public-api `。改动被文档化的声明必须同步更新粘贴块与 manifest。
+- **Agent Note**：非平凡变更 MUST 同 PR 写 note；路径 `{lifecycle}/{class}/yyyy-mm-dd-topic-title.md`；implemented 用 `## Problem` → `## Decision`（现在时）→ `## Alternatives considered` → `## Consequences`，禁止 Proposal/Plan/Acceptance criteria；`## Alternatives considered` 强制；归档 note 永久冻结，不编辑。
 
 ## 诚实边界
 
@@ -99,6 +171,7 @@ updated: 2026-08-27
 - 高度 opinionated，假设你在同仓工作、熟悉 Cordis 与 TypeScript 严格模式；跨仓/跨语言需裁剪。
 - 框架给方向，不给具体 API 签名；落实到代码前以当前 `docs/` 与源码为准。
 - "张力对比"里的"默认落点"是倾向，不是规则；用证据（当前 Consumer、演化独立性）推翻它。
+- 命令与 gate 清单会随仓库演进，以 `package.json` 与 `scripts/run-gates.ts` 为准。
 
 ## 智识谱系
 
