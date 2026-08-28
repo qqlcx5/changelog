@@ -1,7 +1,7 @@
 ---
 id: PB-20260828-001
 type: playbook
-title: Vite + Vue3 项目一次性集成 UnoCSS / Element Plus / lodash-es / sass-embedded
+title: Vite + Vue3 + Element Plus 项目的 UnoCSS 生产级配置
 tags: [vite, vue3, unocss, element-plus, sass]
 status: verified
 source: conversation:2026-08-28
@@ -9,105 +9,110 @@ created: 2026-08-28
 updated: 2026-08-28
 ---
 
-# Vite + Vue3 项目一次性集成 UnoCSS / Element Plus / lodash-es / sass-embedded
+# Vite + Vue3 + Element Plus 项目的 UnoCSS 生产级配置
 
-> 来源：2026-08-28 在 tauri-vue3-template（Vite 6 + Vue 3.5 + TS + pnpm 11）上实战跑通，
-> `vue-tsc --noEmit` 与 `vite build` 均通过，产物已验证含 uno 图标 / element-plus 样式 / scss 编译结果。
+> 来源：2026-08-28。基于 UnoCSS 官方文档（v66.7.x）逐项核对 + 在本项目（Vite 6 / Vue 3.5 / TS / pnpm 11 / unocss 66.8.1）
+> 实跑验证：`vue-tsc --noEmit` 通过，`vite build` 9s 通过，产物断言全部命中。
 
-## 1. 安装（先分组再装，别让 pnpm 乱放）
+## 0. 只用 `unocss` 一个包就够
 
-```bash
-pnpm add element-plus lodash-es                       # 运行时依赖
-pnpm add -D unocss @iconify-json/tabler sass-embedded @types/lodash-es
+`unocss` 包的 exports 已包含全部预设与转换器，**不需要**再装
+`@unocss/preset-wind3` / `@unocss/preset-icons` / `@unocss/transformer-directives` 等分包：
+
+```
+unocss 导出：presetMini presetWind3 presetWind4 presetUno(废弃) presetWind(废弃)
+             presetAttributify presetIcons presetTypography presetWebFonts presetTagify
+             transformerDirectives transformerVariantGroup transformerCompileClass extractorSplit
 ```
 
-- `element-plus` / `lodash-es` 必须进 `dependencies`；`pnpm add` 默认进 dependencies，
-  但**旧 lockfile 里已存在的包会被 pnpm 按 lockfile 归位**，装完一定回读 `package.json` 复核分组。
-- `lodash-es` 自身不带类型，`@types/lodash-es` 必装，否则 `import { debounce } from 'lodash-es'` 报 TS7016。
+唯一需要额外装的是重置样式 `@unocss/reset`（本文用 `preflights` 内联替代，见第 5 节）。
 
-## 2. UnoCSS
+## 1. presetUno / presetWind 已废弃 → 用 presetWind3
 
-`vite.config.ts`：
+官方 INFO：`@unocss/preset-wind` 和 `@unocss/preset-uno` 已被废弃并重命名为 `@unocss/preset-wind3`。
+新项目直接 `presetWind3()`；`presetWind4` 是 Tailwind v4 对齐版（oklch / cascade layers），老语法迁移成本更高，按需选。
 
-```ts
-import UnoCSS from "unocss/vite";
-// plugins: [vue(), UnoCSS()]
-```
-
-`src/main.ts` 里 `import "virtual:uno.css";`，**顺序放在 `element-plus/dist/index.css` 之后**，
-让原子类能覆盖组件库默认样式。
-
-`src/vite-env.d.ts` 补声明，否则 TS2307 找不到模块：
-
-```ts
-declare module "virtual:uno.css";
-```
-
-## 3. presetIcons + @iconify-json/tabler
+## 2. presetIcons：必须显式写 collections
 
 ```ts
 presetIcons({
   scale: 1.2,
-  warn: true,
+  warn: true,                          // 图标名写错只输出一行 warn，页面直接空白
+  extraProperties: { display: "inline-block", "vertical-align": "middle" },
   collections: {
-    tabler: () => import("@iconify-json/tabler/icons.json").then((m) => m.default),
+    tabler: () => import("@iconify-json/tabler/icons.json").then(m => m.default),
   },
 })
 ```
 
-显式写 `collections` 比依赖 node 自动探测稳（Windows / 打包环境都能解析）。
-**图标名必须查表再写**，写错只在构建日志里出现一行 `[unocss] failed to load icon "xxx"`（warn 级别，不失败），
-极易漏掉导致页面上空白：
+- 文档说 node 环境"自动搜索已安装的 iconify 数据集"——**pnpm 大依赖树下实测会卡住构建**
+  （transforming 阶段挂死 >90s）。显式 `collections` 后同样工程 9s 完成。见 ERR-20260828-002。
+- 图标名必须查表，写错是静默空白：
+  `node -e "const i=require('./node_modules/@iconify-json/tabler/icons.json');console.log(Object.keys(i.icons).includes('rocket'))"`
 
-```bash
-node -e "const i=require('./node_modules/@iconify-json/tabler/icons.json'); \
-console.log(Object.keys(i.icons).filter(n=>n.includes('brand-v')).join(','))"
-```
-
-## 4. Element Plus（全量引入，零额外插件）
+## 3. 两个必开转换器
 
 ```ts
-import ElementPlus from "element-plus";
-import "element-plus/dist/index.css";
-import "virtual:uno.css";
-createApp(App).use(ElementPlus).mount("#app");
+transformers: [transformerDirectives(), transformerVariantGroup()]
 ```
 
-`tsconfig.json` 补全局组件类型，否则模板里 `<el-button>` 类型不认：
+- `transformerDirectives`：`@apply` / `--uno:` / `theme()` / `icon()`，让 `<style lang="scss">` 里能复用原子类。
+  实测产物：`.greet-msg{@apply rounded-lg px-4 py-2;color:theme("colors.primary")}`
+  → `.greet-msg{...border-radius:.5rem;padding:.5rem 1rem;color:#409eff}`。
+- `transformerVariantGroup`：`hover:(bg-red text-white)` 变体分组。
 
-```jsonc
-"types": ["element-plus/global"]   // 会限制自动引入的 @types，需 @types/node 的场景另加进数组
-```
+## 4. 与 Element Plus 共存的四条规则
 
-全量引入产物约 +366 KB CSS / +1 MB JS（含 lodash 与 EP）；要瘦身再上
-`unplugin-vue-components` + `unplugin-auto-import` 按需引入（本次未引入，保持依赖最小）。
+1. **加载顺序**：`element-plus/dist/index.css` → `element-plus/theme-chalk/dark/css-vars.css` → `virtual:uno.css`。
+   原子类放最后才能覆盖组件默认样式。
+2. **不要用 `important: '#app'`**：UnoCSS 的 `important` 支持传选择器前缀（提升特异性而不加 `!important`），
+   传 `#app` 后所有工具类都变成 `#app xxx`，而 EP 的 `append-to-body` / `teleported` 组件（Dialog、Select、Tooltip 下拉）
+   渲染在 body 下，会整体失去 uno 样式。靠加载顺序解决优先级即可。
+3. **暗黑模式对齐**：EP 用 `<html class="dark">` 切换，uno 默认 `dark: 'class'` 也是 `.dark`——天然一致，
+   一次 `document.documentElement.classList.toggle('dark')` 同时驱动两边。
+4. **调色板对齐**：把 EP 默认色写进 `theme.colors`（primary #409eff / success #67c23a / warning #e6a23c /
+   danger #f56c6c / info #909399），就能写 `text-danger`、`bg-primary`。
 
-## 5. sass-embedded
+## 5. preflight 冲突：button 背景被刷成 transparent
 
-装了就够，Vite 6 会**自动优先**使用它（比 `sass` 快数倍），无需 `css.preprocessorOptions` 也能跑；
-显式声明更明确：
+`presetWind3` 默认带 preflight，其中 `button,[type=button]{background-color:transparent}` 会和 UI 框架冲突。
+官方为此提供 `@unocss/reset/tailwind-compat.css`（去掉该条重写）。不想多装依赖就内联等价补丁：
 
 ```ts
-css: { preprocessorOptions: { scss: { api: "modern-compiler" } } }
+preflights: [{
+  getCSS: () => `
+button, [type='button'], [type='reset'], [type='submit'] {
+  background-color: revert;
+  background-image: none;
+}`
+}]
 ```
 
-pnpm 装完可能报 `Failed to create bin ... sass. ENOENT`，那是 Vite 内置 `sass` 的软链创建失败，
-**可忽略**，不影响 sass-embedded 生效。
+## 6. 提取范围与动态类名
 
-## 6. 验收（三步，别只看 dev server）
+```ts
+content: { pipeline: { include: [/* 默认正则 */, "src/**/*.{js,ts}"] } },
+safelist: [],   // 运行时拼接的类名（如 `text-${state}`）必须列在这里，否则构建后被摇掉
+```
+
+默认只扫 `vue / svelte / jsx / tsx / html / md / astro` 等，**`.js` `.ts` 不在内**——
+类名常量表写在 ts 里时务必加进去，或用 `// @unocss-include` 逐文件标记。
+
+## 7. 验收（三步）
 
 ```bash
-pnpm exec vue-tsc --noEmit          # 类型
-pnpm exec vite build                # 构建，注意日志里的 failed to load icon
-# 产物断言：图标类 + 组件库样式 + scss 编译结果都在
-$css = Get-ChildItem dist/assets/*.css | Select-Object -First 1
-$c = Get-Content $css.FullName -Raw
-$c.Contains(".i-tabler-rocket"), $c.Contains(".el-button"), $c.Contains(".greet-msg")
+pnpm exec vue-tsc --noEmit
+pnpm exec vite build                 # 注意日志里的 [unocss] failed to load icon
+# 产物断言
+$c = [IO.File]::ReadAllText((Get-ChildItem dist/assets/*.css | Select-Object -First 1).FullName)
+$c.Contains("i-tabler-rocket"); $c.Contains("revert"); $c.Contains("409eff")
 ```
 
 ## 坑位清单
 
-1. `node_modules` 里有包 ≠ `package.json` 声明了它：新克隆会直接构建失败，改完配置顺手 `pnpm install` 同步 lockfile。
-2. UnoCSS 图标名不校验 = 静默空白，见第 3 节查表命令。
-3. `types` 字段一写就限制了自动引入的 `@types/*`，后续需要别的全局类型要手动加进数组。
-4. `virtual:uno.css` 无类型声明会 TS2307，全量 `element-plus` 无 `element-plus/global` 会丢组件类型。
+1. presetIcons 不写 collections → pnpm 下构建挂死（ERR-20260828-002）。
+2. 图标名不校验 → 静默空白，构建不失败。
+3. `important: '#app'` + EP teleported 组件 → 弹层样式全丢。
+4. js/ts 里的类名常量默认不被扫描。
+5. 全量引入 EP：产物约 +370 KB CSS / +1 MB JS，要瘦身再上 `unplugin-vue-components` 按需引入。
+6. 装了 `virtual:uno.css` 但没在 `vite-env.d.ts` 里 `declare module "virtual:uno.css"` → TS2307。

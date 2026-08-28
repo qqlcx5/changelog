@@ -25,7 +25,7 @@
 | PB-20260827-001 | DeepSeek Harness 设计哲学 · 思维框架 | draft | deepseek-harness,architecture,design-philosophy,cordis | 2026-08-27 | playbooks/harness-design-philosophy.md |
 | PB-20260827-002 | 通用架构哲学 · 思维框架（可移植版） | draft | architecture,design-philosophy,capability-seam,dependency-inversion | 2026-08-27 | playbooks/generic-architecture-philosophy.md |
 | PB-20260827-003 | 权威↔投影一致性机械校验——给「文档必须等于代码」装上门禁 | verified | architecture,ssot,baseline,guard | 2026-08-27 | playbooks/authority-projection-consistency-check.md |
-| PB-20260828-001 | Vite + Vue3 项目一次性集成 UnoCSS / Element Plus / lodash-es / sass-embedded | verified | vite,vue3,unocss,element-plus,sass | 2026-08-28 | playbooks/vite-vue-unocss-elementplus.md |
+| PB-20260828-001 | Vite + Vue3 + Element Plus 项目的 UnoCSS 生产级配置 | verified | vite,vue3,unocss,element-plus,sass | 2026-08-28 | playbooks/vite-vue-unocss-elementplus.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
@@ -33,7 +33,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 3 | 2026-08-28 |
+| errors | learnings/ERRORS.md | 4 | 2026-08-28 |
 | learnings | learnings/LEARNINGS.md | 2 | 2026-08-26 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 <!-- END:learnings -->

@@ -62,3 +62,30 @@
 再 `pnpm install` 同步 → 回读复核」，构建与类型检查均通过，分组保持正确。
 
 See Also: PB-20260828-001
+
+## [ERR-20260828-002] UnoCSS presetIcons 不写 collections 会在 pnpm 下把构建挂死
+
+**Logged**: 2026-08-28 | **Status**: resolved | **Tags**: unocss, preset-icons, pnpm, build-hang
+
+### Summary
+`presetIcons` 配置里省略 `collections`（依赖官方所说的"node 环境自动搜索已安装的 iconify 数据集"），
+`vite build` 会停在 `transforming...` 阶段不再推进（>90s 无输出也无退出）；补上显式 `collections` 后同样工程 9s 构建完成。
+
+### Details
+- 场景：按官方文档把 `presetIcons({ scale, warn, extraProperties })` 精简配置落到一个
+  Vite 6 + pnpm 11 + unocss 66.8.1 的 Vue3 项目（依赖树 300+ 包）；
+- 现象：`vite build` 卡在 `transforming...`，node 进程 CPU 持续占用，日志零新增行，也不超时退出；
+- 定位方式：逐个回退本次新增项（presetWind3 / presetAttributify / transformerDirectives / content.pipeline），
+  最后定位到 presetIcons 的集合解析；
+- 根因推断：node 端的集合自动发现会去 node_modules 里搜 `@iconify-json/*`，pnpm 的
+  符号链接 + 隔离目录结构（`node_modules/.pnpm/...`）让这次扫描退化成极慢甚至不终止的遍历；
+- 危害：这类"卡住"不报错、不失败，只会让人以为机器慢；在 CI 里表现为任务超时，排查成本远高于报错。
+
+### Suggested Action
+1. `presetIcons` 一律显式写 `collections`，用动态导入按需加载：
+   `tabler: () => import('@iconify-json/tabler/icons.json').then(m => m.default)`；
+2. 看到构建卡在 `transforming...` 超过 30s，优先怀疑图标集合解析，而不是机器性能；
+3. 给构建命令加超时告警（CI 里 `timeout` 包一层），把"挂死"变成"报错"。
+
+### Resolution
+2026-08-28 同会话内补回显式 `collections` 后构建恢复正常（9.02s），产物图标 CSS 断言全部命中。
