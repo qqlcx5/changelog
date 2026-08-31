@@ -190,3 +190,71 @@ npm 12 默认拦截 `preinstall` 导致原生二进制没落地；npm 生成的 
 2026-08-31：`npm install -g pnpm@12 --allow-scripts=pnpm` 装上 12.1.0，
 再手工修好 `pnpm.ps1` 的 `$exe` 拼接，`pnpm -v` 输出 `12.1.0`。
 环境：Windows / Node v22.23.2 / npm 12.0.2 / registry 为 npmmirror 镜像。
+
+## [ERR-20260831-004] PowerShell 把命令的 stderr 输出判为 NativeCommandError，$LASTEXITCODE 变成假 1
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: powershell, exit-code, stderr, false-negative
+
+### Summary
+`pnpm build` 明明成功（日志 `✓ built in 9.53s`），`$LASTEXITCODE` 却是 1。
+原因：Vite 的 chunk-size 警告写 stderr，PowerShell 把**任何** stderr 输出包成
+`NativeCommandError` 记录，并把 `$LASTEXITCODE` 置为非 0。凭退出码判定构建成败会得出反向结论。
+
+### Details
+- 场景：给 tauri-template 接入 Vue Router + Pinia 后做构建验证；
+- 现象一：``pnpm build 2>&1 | Select-Object -Last 30; echo "EXIT=$LASTEXITCODE"``
+  输出 `EXIT=1`，但同一次日志末尾是 `✓ built in 9.53s`；
+- 现象二：单独再跑一次同样命令，`$LASTEXITCODE` 变成 0 —— 同一个命令给出两个结论；
+- 根因：PowerShell 对原生命令的 stderr 输出生成 `ErrorRecord`（报文中可见
+  `CategoryInfo : NotSpecified`、`NativeCommandError`），这是宿主行为而非子进程失败；
+  Vite 的 `(!) Some chunks are larger than 500 kB` 属警告，走 stderr 但退出码为 0；
+- 危害：CI 或脚本里用 `$LASTEXITCODE` 判定成败会**把成功判成失败**；
+  反过来若只看退出码不看日志，也会把"带警告的成功"当成全绿而漏掉体积回退。
+
+### Suggested Action
+1. 判定构建成败，用**输出内容**做断言而不是退出码：
+   匹配 `built in` / `error TS` 等特征串（如 `pnpm build 2>&1 | Select-String "built in|error"`）；
+2. 需要严格退出码时，用 `cmd /c "<cmd> && exit 0"` 包裹，或在脚本里
+   临时 `$ErrorActionPreference = 'Continue'` 并检查 `$LASTEXITCODE` 之外再核日志；
+3. 看到 `NativeCommandError` 先读日志尾部确认真实结果，不要直接下"失败"结论；
+4. 同理适用于任何"把警告写 stderr"的工具链（eslint、tsc --noEmit 的部分输出等）。
+
+### Resolution
+2026-08-31：改为对输出内容做断言后确认构建通过（`✓ built in 7.98s` / `9.53s`），
+产物 chunk 分布符合预期（vue / element-plus / lodash / vendor + 三个路由懒加载 chunk）。
+
+## [ERR-20260831-005] pnpm 隔离布局下，顶层 node_modules 查找会把"依赖齐全"误判为缺失
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: pnpm, node-modules, peer-deps, false-negative
+
+### Summary
+`Test-Path node_modules/@vue` 返回 False，据此怀疑 pinia 的必需 peer 依赖
+`@vue/devtools-api` 缺失会导致构建失败；实际它已正确安装在
+`node_modules/.pnpm/pinia@4.0.3/node_modules/@vue` 下，构建毫无问题。
+
+### Details
+- 场景：确认 `pinia@4.0.3` 的 peer `@vue/devtools-api`（`peerDependenciesMeta` 中
+  `optional: false`）是否已安装，因为它被 `pinia/dist/pinia.js` 第 8 行**静态顶层导入**；
+- 误判路径：`Test-Path node_modules\@vue` → `False`；
+  `node -e "require('@vue/devtools-api/package.json')"` → 抛 MISSING；
+  据此一度判定"静态导入必然解析失败、vite build 会挂"；
+- 真相：pnpm 的隔离布局把传递/peer 依赖放进
+  `node_modules/.pnpm/<pkg>@<ver>/node_modules/` 内，**不提升到顶层**。
+  从 pinia 自己的视角，`@vue/devtools-api` 就在同级目录，解析完全正常；
+- 辨别方法：列出 `node_modules/.pnpm/pinia@*/node_modules/` 下的目录，
+  其中确有 `@vue`、`vue`、`typescript` 等，即证明链接完整；
+- 危害：这类误判会让人去装一个根本不缺的包，甚至为了"修好"而破坏正确的依赖布局。
+
+### Suggested Action
+1. 在 pnpm 项目里判断依赖是否存在，**不要**只看顶层 `node_modules/<pkg>`；
+   查 `node_modules/.pnpm/<pkg>@*/node_modules/` 才是准的；
+2. 更可靠：直接用构建结果断言（`pnpm build` 是否报 `Failed to resolve import`），
+   而不是静态查文件；
+3. 顶层查不到但构建通过 ⇒ 属于 pnpm 正常的隔离布局，不是缺失；
+4. `node -e require(...)` 只覆盖 Node 的顶层解析路径，不能代表 Vite/bundler 的解析结果。
+
+### Resolution
+2026-08-31：列出 `.pnpm/pinia@4.0.3/node_modules/` 确认 `@vue` 存在后放弃"补装"，
+直接 `pnpm build` 验证通过（`✓ built in 8.68s`），未做任何多余改动。
+
+See Also: ERR-20260828-001
