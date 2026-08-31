@@ -346,3 +346,37 @@ Mapper XML 三处（INSERT 列 / VALUES / ON DUPLICATE）同步；
 架构检查通过（ERROR 0）。核对清单沉淀为 PB-20260825-001 第 7 节。
 
 See Also: PB-20260825-001
+
+---
+
+## [ERR-20260831-008] 列表跳详情零请求：后端进程落后源码 + NON_NULL 隐藏 null 主键
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: jackson, non-null, version-skew, debugging
+
+### Summary
+
+列表页有数据，但点击跳详情后 URL 不带主键参数、一个接口请求都不发、页面全「-」。前端链路逐环排查无缺陷，根因是本地后端进程落后于工作区源码：列表接口响应行缺主键 `id`，而全局 Jackson `NON_NULL` 把值为 null 的字段整个隐藏，症状变成了「字段不存在」，极具迷惑性。
+
+### Details
+
+- 现象链（QCM V2 供应商主数据）：列表接口响应 `records[0]` 无 `"id"` 键 → 前端 `goDetail` 里 `row.id` 为 undefined → `router.push` 的 query 被 vue-router 忽略 → 详情页 `loadDetail()` 的 `if (!id) return` 静默返回 → 零请求 + 详情全「-」。
+- 排查中逐环验证全部通过：列表 SQL `SELECT s.id, ...`（且 git 全历史版本都带主键）、`BaseEntity` 有 lombok getter 序列化正常、src 与 target/classes 的 Mapper XML MD5 一致、前端 snake_case 行转换不影响全小写 `id`、ProTable 行数据原样透传、隐藏详情页路由注册（`menu_type=1` + `is_show=0` 会被后端例外下发）、后端详情 VO 结构与前端取值完全对齐。矛盾的唯一解释：**运行中的后端（vite proxy target `localhost:8082`）早于当天 pageSchema 契约批次提交启动，进程未随源码更新重启**。
+- 关键认知 ①：全局 Jackson `NON_NULL`（`JsonUtils.applyGlobalConvention`）下「响应缺字段」＝「运行时该值为 null」，不能把「字段不存在」直接推断为「SQL 没查/没映射」。
+- 关键认知 ②：前端 vite dev server 有 HMR 实时生效，后端 JVM 却不会自己更新 classes——验收当天刚提交的后端改动，必须重启后端才可见。
+- 关键认知 ③：同模块对照法——商品主数据列表走 MyBatis-Plus 标准 `page()` 查询（实体全列、必含主键），供应商列表走自定义 XML SQL（多语言 COALESCE 联表），自定义 SQL 是列缺失/版本漂移的高发位；用一个正常兄弟接口做对照能快速圈定问题面。
+
+### Suggested Action
+
+「列表有数据但详情页零请求」三步定位法：
+
+1. 看跳转后地址栏 URL 是否带业务主键参数（`?id=...`）——不带则上游行数据缺主键；
+2. F12 看列表接口响应 `records[0]` 是否含主键字段——缺字段先想起 NON_NULL（值为 null），再顺藤摸瓜查运行后端版本；
+3. 对比运行后端与工作区源码：`git log --format="%h %ad %s" --date=format:"%m-%d %H:%M"` 的提交时间 vs 后端进程启动时间，重新编译并重启后端。
+
+前端防御：跳转入口对 `row.id` 判空做响亮失败提示（`ElMessage.warning`），把静默失败变显式（本次已在 `supplierMasterData/index.vue` 的 `goDetail` 落地）。
+
+### Resolution
+
+2026-08-31：确认根因为本地后端进程落后源码（当天 13:35 刚提交 pageSchema 契约批次），指导重启后端即可恢复；前端 `goDetail` 增加主键判空响亮失败提示，ESLint 0 问题。项目侧经验已同步 agent memory（common_pitfalls_experience）。
+
+See Also: PB-20260825-001
