@@ -42,3 +42,42 @@ Java 字段第二字符大写（如 `jAmsea`）且无 `@JsonProperty` 时，Jack
 
 ### Suggested Action
 前端双 key 分离：提交 key 用 JavaBeans 属性名（`JAmsea`），显示 key 用序列化 key（`row.jamsea`）；或后端加 `@JsonProperty` 显式统一两层口径（需评估历史报文兼容）。
+
+---
+
+## [LRN-20260831-001] 官方 TIP 的"必须配置"要先用探针实测，再决定采纳
+
+**Logged**: 2026-08-31T17:00:00 | **Status**: resolved | **Tags**: docs, verification, pnpm, dayjs
+
+### Summary
+Element Plus 文档要求 pnpm 用户为 `dayjs` 配置依赖提升（`shamefullyHoist` + `nodeLinker: hoisted`），
+否则按需引入会出问题。实测（Vite 6 + pnpm 12）该问题**根本不存在**，
+盲目照做反而会拍平 `node_modules`、丢掉 pnpm 的隔离优势。
+
+### Details
+- 场景：按官方 Quick Start 给模板接 Element Plus 按需引入，读到关于 dayjs 的 TIP；
+- 该 TIP 措辞很硬（"you need to configure pnpm to hoist dependencies"），
+  照做要改 `pnpm-workspace.yaml`，属于影响整个依赖布局的**重型变更**；
+- 实测结果：`dayjs` 不在 package.json、不在顶层 node_modules（只在 `.pnpm/dayjs@1.11.23`），
+  但被 Vite 内联进 `node_modules/.vite/deps/element-plus_es.js`（212 处命中）；
+  预构建产物 `require(` 计数 0，生产产物 `module.exports` 计数 0，`ElDatePicker` 样式请求正常；
+- 结论：Vite 6 的 optimizeDeps 已能处理这个 CJS 传递依赖，TIP 是历史遗留建议；
+- 反向代价：若真加 `shamefullyHoist: true` + `nodeLinker: hoisted`，
+  `.pnpm` 隔离目录不再使用，此前"靠 `.pnpm/<pkg>@<ver>/node_modules/` 判断依赖是否齐全"
+  的排查手法会全部失效（见 ERR-20260831-005）。
+
+### Suggested Action
+1. 读到文档里"必须/需要配置 X"的硬性要求，先评估 X 的**破坏半径**：
+   全局依赖布局、构建流程、类型系统这类重型变更，一律先实测再采纳；
+2. 设计最小探针直接验证问题是否存在（本次：搜产物里的 `dayjs` / `require(` / `module.exports`，
+   并 dev 下直接请求 `date-picker` 的样式模块）；
+3. 文档给的替代方案里，优先选**局部、可逆**的那个
+   （本次是 `pnpm add dayjs`，而非全局 hoist）；
+4. 把"实测结论 + 适用版本"写进项目注释，避免后来者重复踩或重复排查。
+
+### Resolution
+2026-08-31：未采纳 hoist 建议，也未加 dayjs 依赖（实测无必要）；
+改为在 `README.md` / `README.zh-CN.md` 的按需加载章节记录实测数据与判断依据，
+并指明"若其他工具链真遇到问题，用 `pnpm add dayjs` 而非 `shamefullyHoist`"。
+
+See Also: PB-20260831-003, ERR-20260831-005

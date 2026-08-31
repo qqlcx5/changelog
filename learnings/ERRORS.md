@@ -258,3 +258,42 @@ npm 12 默认拦截 `preinstall` 导致原生二进制没落地；npm 生成的 
 直接 `pnpm build` 验证通过（`✓ built in 8.68s`），未做任何多余改动。
 
 See Also: ERR-20260828-001
+
+## [ERR-20260831-006] 在 Vue 模板里调用 auto-import 的全局 const 报 TS2339
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: vue, unplugin-auto-import, global-const, ts2339
+
+### Summary
+Element Plus 改为按需引入后，`vue-tsc` 报
+`Property 'ElMessage' does not exist on type 'CreateComponentPublicInstanceWithMixins<...>'`。
+报错不在 `<script setup>`，而在**模板**里 `@click="ElMessage.info(...)"` 那一行。
+
+### Details
+- 场景：接入 `unplugin-auto-import` 后删掉手写的 `import { ElMessage }`，
+  模板里原本就存在的 `@click="ElMessage.info('ElMessage 提示')"` 与
+  `@confirm="ElMessage.success('已确认')"` 开始报错；
+- 误导点一：报错类型提到 `CreateComponentPublicInstanceWithMixins`，看着像"组件实例上没这个属性"，
+  容易往 props / expose / 组件类型上查；
+- 误导点二：`src/auto-imports.d.ts` 确实生成了，内容也确实声明了全局 const
+  `ElMessage`，且 `vue-tsc --noEmit --listFiles` 能列出它——文件在、被加载、依然报错；
+- 根因：`unplugin-auto-import` 提供的是 **`declare global` 的 const**，
+  只在模块作用域（`<script setup>` 编译产物）里可解析；
+  **模板表达式是在组件实例的 render 作用域求值的，不走全局作用域**，所以解析不到；
+- 危害：这类代码在全量引入时代是能跑的（那时 `ElMessage` 是显式 import 进 setup 的），
+  改按需引入后才暴露，容易误判成"按需引入配错了"。
+
+### Suggested Action
+1. 模板只做事件绑定，具体调用一律收进 `<script setup>` 的函数里：
+   `@click="showMessage"` + `function showMessage() { ElMessage.info(...) }`；
+2. 排查口诀：**报 TS2339 且行号落在 `.vue` 的模板区域** → 先怀疑"模板作用域 vs 全局作用域"，
+   而不是组件类型定义；
+3. 确认 dts 是否真的参与编译，用 `vue-tsc --noEmit --listFiles | grep auto-imports`，
+   不要只看文件存在与否；
+4. 这条同样适用于 `unplugin-auto-import` 引入的 Vue API（`ref` / `computed` 等），
+   它们在模板里也**不能**直接使用。
+
+### Resolution
+2026-08-31：在 `DemoElement.vue` 中新增 `onConfirm()` / `showMessage()` 两个函数收口调用，
+模板改为绑定函数名；`pnpm build`（含 `vue-tsc --noEmit`）通过，产物样式注入正常。
+
+See Also: PB-20260831-003

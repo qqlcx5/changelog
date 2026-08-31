@@ -28,6 +28,7 @@
 | PB-20260828-001 | Vite + Vue3 + Element Plus 项目的 UnoCSS 生产级配置 | verified | vite,vue3,unocss,element-plus,sass | 2026-08-31 | playbooks/vite-vue-unocss-elementplus.md |
 | PB-20260831-001 | 开源仓库可发现性优化清单（README 双语 + 元数据 + topics） | verified | github,readme,discoverability,docs | 2026-08-31 | playbooks/github-repo-discoverability.md |
 | PB-20260831-002 | Tauri 2 模板配置加固与排障（CSP / 路由 / 改名 / 打包元数据） | verified | tauri,csp,config,security | 2026-08-31 | playbooks/tauri2-config-hardening.md |
+| PB-20260831-003 | Element Plus 按需引入（Vite + pnpm）——官方方案落地与实测验证 | verified | element-plus,on-demand,vite,pnpm | 2026-08-31 | playbooks/element-plus-on-demand.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
@@ -35,7 +36,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 9 | 2026-08-31 |
-| learnings | learnings/LEARNINGS.md | 2 | 2026-08-26 |
+| errors | learnings/ERRORS.md | 10 | 2026-08-31 |
+| learnings | learnings/LEARNINGS.md | 3 | 2026-08-31 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 <!-- END:learnings -->
