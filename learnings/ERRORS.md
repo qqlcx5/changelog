@@ -297,3 +297,52 @@ Element Plus 改为按需引入后，`vue-tsc` 报
 模板改为绑定函数名；`pnpm build`（含 `vue-tsc --noEmit`）通过，产物样式注入正常。
 
 See Also: PB-20260831-003
+
+## [ERR-20260831-007] pageSchema 查询白名单登记了不存在的物理列，只有命中该筛选项才 500
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: qcm-v2, pageschema, schema-drift, mysql
+
+### Summary
+查询白名单（`sys_model_table_column_query`）里登记了物理表根本不存在的列，编译、启动、
+"不筛选直接打开页面"三轮全部绿灯，只有用户输入该筛选项时才抛 MySQL 1054 Unknown column，接口 500。
+
+### Details
+- 场景：QCM V2「SCM备案明细」列表页 `/md/scmSupplierDetail`（表 `bd_scm_supplier_detail`）。
+  按用户提供的 29 字段规格表逐条核对，发现「备案供应商简称 `vendor_short_name`」在四处登记齐全——
+  建模列元数据 `sys_model_table_column`（sort=4）、查询配置 `sys_model_table_column_query`（LIKE, query_sort=2）、
+  菜单列契约 `sys_menu_form_column.visible_columns`、前端 ProTable `columns`（带 `search`）——
+  唯独 `CREATE TABLE`、实体、Mapper XML 三处都没有这一列；
+- 根因：`PageSchemaConditionValidator.validateAndApply` 只做「白名单 + compareType」校验
+  （从 `queryConfigMap` 取 compareType 比对，不等抛 ValidException），**不校验 columnCode 是否对应真实物理列**；
+  `QueryWrapperGenerator.applyQueryConditions` 同样是纯拼装，直接 `queryWrapper.like(column, value)`。
+  于是缺陷逃过编译期、启动期和日常自测——不筛选时页面正常打开，只是该列空白；
+- 放大点一：契约是数据驱动的（DB 配置 + 本地缓存 5 分钟），物理列是 DDL／实体／XML 三方维护，
+  两者之间没有任何机械门禁；
+- 放大点二：契约登记往往与建表不同批次、不同人完成（本例建表 08-19、建契约 08-27），跨批次最容易漏；
+- 一般化形态：投影（契约／元数据）与权威（物理表）分处两地，校验器只验投影自洽、不验投影↔权威一致性。
+- 顺带查出同源缺陷：`vendor_code` 的"按 vendor_id 关联主表回填"写在 DDL 注释、Service 类注释、
+  Controller 注释、Mapper XML 注释**四处**，但 `doSync` 里从未实现，直接用报文值落库——
+  注释与实现长期背离，比缺列更难被察觉。
+
+### Suggested Action
+1. 新增镜像页／契约页时用「物理列集合 ⊇ 契约列集合」做机械核对：从 `CREATE TABLE` 提取列名，
+   与 `sys_model_table_column` / `sys_model_table_column_query` / `visible_columns` / 前端 `columns.field`
+   四处求差集，差集必须为空；
+2. 手写 Mapper XML 的 `insertOrUpdateBatch` 是第三处易漏点：新增物理列后必须同步改
+   INSERT 列、VALUES、`ON DUPLICATE KEY UPDATE` 三处，否则列存在但永远落不进值；
+3. 反向核对同样要做：物理表有、契约里没有的列（本例 `vendor_code_h` / `two_mdm_code_h`）
+   属于落库但不展示的死列，显式决策"建契约"还是"删列"，不留半成品；
+4. 校验器侧可加固：`validateAndApply` 增加 columnCode 与实体／物理列的合法性校验，
+   把运行期 1054 前移为启动期或配置期失败；
+5. 注释声称的能力要有对应实现，评审时把"注释与代码是否一致"当作独立检查项。
+
+### Resolution
+2026-08-31：补建 `vendor_short_name`——新增增量 DDL
+`jp-console/db/202608/DDL/scm备案明细_备案供应商简称增列.sql` 及其回滚脚本，
+含存量数据 `UPDATE ... JOIN bd_scm_supplier` 回填；实体加字段并补 `@Query`；
+Mapper XML 三处（INSERT 列 / VALUES / ON DUPLICATE）同步；
+并补上四处注释声称存在但从未实现的 `fillFromMaster()`——
+按 `vendor_id` 关联主表批量回填 `vendor_code` 与 `vendor_short_name`。
+架构检查通过（ERROR 0）。核对清单沉淀为 PB-20260825-001 第 7 节。
+
+See Also: PB-20260825-001

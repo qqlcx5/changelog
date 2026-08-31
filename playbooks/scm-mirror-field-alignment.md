@@ -1,15 +1,15 @@
 ---
 id: PB-20260825-001
 type: playbook
-title: QCM V2 镜像页前端字段口径对齐清单（SCM & MDP）
+title: QCM V2 镜像页字段口径对齐清单（SCM & MDP）
 tags: [qcm-v2, protable, field-mapping, jackson]
 status: verified
 source: conversation:2026-08-25
 created: 2026-08-25
-updated: 2026-08-26
+updated: 2026-08-31
 ---
 
-# QCM V2 镜像页前端字段口径对齐清单（SCM & MDP / jp-ui）
+# QCM V2 镜像页字段口径对齐清单（SCM & MDP / jp-ui + 后端契约）
 
 > 适用：外部系统（SCM/XLS/MDP 等）推送数据落库后，在 jp-ui 做只读镜像展示页（ProTable 列表）。
 > 本文为可直接复用的落地核对清单，来源于 SCM采购入退库（scmPurchaseStock）两轮对齐实战（兄弟页面 scmPurchaseOrder 同口径），MDP 商品主数据（productMasterData）实战补充 1.1 变体。
@@ -68,3 +68,34 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 3. 无 `@Query` 的字段配搜索 → 输入无任何过滤效果。
 4. 派生字段误当报文字段用全大写 key 取值 → 空白（非报文字段响应 key 是驼峰）。
 5. 连续大写开头字段（如 `jAmsea`）前端统一用序列化 key（`jamsea`）作 field → 显示正常但搜索提交 key 绑定不上，筛选静默失效（须按 1.1 节双 key 分离）。
+
+## 7. 契约层：建模列 / 查询白名单 / 物理列三方一致性核对
+
+> 适用：页面走 pageSchema 契约（`sys_model_table` + `sys_model_table_column` +
+> `sys_model_table_column_query` + `sys_menu_form_column.visible_columns`）。
+> 来源：SCM备案明细（scmSupplierDetail）对抗式审查实战，详见 ERR-20260831-007。
+
+**物理列是权威**，四份清单必须两两对齐：
+
+| 清单 | 位置 | 缺失后果 |
+|------|------|---------|
+| 物理列（权威） | `CREATE TABLE` / 实体 / Mapper XML | — |
+| 建模列元数据 | `sys_model_table_column` | 页面拿不到契约，退回前端列 `search` 回退模式 |
+| 查询白名单 | `sys_model_table_column_query` | 该字段不可筛选 |
+| 展示列 | `sys_menu_form_column.visible_columns` | 该列不渲染 |
+
+核对动作（差集必须为空）：
+
+1. **契约列集合 − 物理列集合 = ∅**：非空即 500 隐患。`PageSchemaConditionValidator` 只校验
+   白名单与 compareType，**不校验 columnCode 是否对应真实物理列**；`QueryWrapperGenerator.applyQueryConditions`
+   也是纯拼装（`queryWrapper.like(column, value)`）。缺陷会逃过编译期、启动期与"不筛选直接打开页面"的自测——
+   不筛选时只表现为该列空白，只有输入筛选值才抛 MySQL 1054 Unknown column。
+2. **物理列集合 − 契约列集合**：剩下的要显式确认是"有意预留"还是"落库但不展示的死列"，不留中间态。
+3. 前端 `columns[].field` 与 `visible_columns` 逐项一致，顺序也随契约。
+
+**手写 Mapper XML 是第三处易漏点**：`insertOrUpdateBatch` 的 INSERT 列、VALUES、`ON DUPLICATE KEY UPDATE`
+三处都要同步，漏一处则物理列存在但永不落值（MyBatis-Plus 的自动填充救不了手写 XML）。
+
+**回退模式陷阱**：契约未加载时（典型如 `sys_menu_form_column.tenant_id` 与环境租户不匹配被判定"未绑定"），
+页面退回前端列 `search` + 实体 `@Query` 绑定，此时**只有带 `@Query` 的字段能筛**。契约里配了筛选、
+实体却没 `@Query` 的字段静默失效——不报错、查不出差异，比 500 更难发现。新增契约筛选项时顺手确认实体有 `@Query`。
