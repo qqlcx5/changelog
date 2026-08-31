@@ -150,3 +150,43 @@ See Also: PB-20260828-001
 产物图标数量 123 且断言全通过。
 
 See Also: ERR-20260828-002, PB-20260828-001
+
+## [ERR-20260831-003] npm 装不上 pnpm 12：安装脚本被拦 + pnpm.ps1 shim 漏拼 $exe
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: pnpm, npm, install-scripts, shim
+
+### Summary
+`npm install -g pnpm@12` 装完 `pnpm -v` 输出为空、不报错、exit 0。两个独立故障叠加：
+npm 12 默认拦截 `preinstall` 导致原生二进制没落地；npm 生成的 `pnpm.ps1` 又漏拼 `$exe`，
+让 PowerShell 去执行无扩展名文件。命令行看起来"装上了但不能用"。
+
+### Details
+- 背景：pnpm 12.0（2026-08-26 发布）是 Rust 重写版，**`latest` 标签仍指向 11.x 线**，
+  12.x 只发在 `next-12` tag（`npm view pnpm dist-tags` 可见 `next-12: 12.1.0`）。
+  从 npm 安装时它是 wrapper，靠 `preinstall: node install.js` 下载并链接 `@pnpm/exe.win32-x64` 原生二进制；
+- 故障一：npm 12 引入 allowScripts 安全策略，**默认拦截未被允许的安装脚本**。
+  表现为仅一行 warn（`1 package had install scripts blocked ... Run npm install -g --allow-scripts=pnpm`），
+  exit code 仍是 0，包"装成功"，但二进制没链接 → `pnpm` 只剩空壳；
+- 故障二：`D:\Program Files\npm\pnpm.ps1` 里调用写成 `& "$basedir/node_modules/pnpm/pnpm"`，
+  前面算好的 `$exe=".exe"` **没被拼进去**。PowerShell 里执行无扩展名文件静默失败；
+  而 `pnpm.cmd` 走 cmd 的 PATHEXT 查找能命中 `pnpm.exe`，所以 `pnpm.cmd -v` 正常、`pnpm -v` 全空——
+  这是判断"shim 坏而非二进制坏"的关键分界；
+- 排查用具：`where.exe pnpm` 只列出 `pnpm` / `pnpm.cmd`（`.ps1` 不在 PATHEXT 内，不会被列出），
+  必须用 `Get-Command pnpm` 才能看到 PowerShell 实际解析到的是 `pnpm.ps1`；
+- 危害：两处都不报错。第一处是 warn，第二处是静默退出，合起来极易被误判为"网络问题 / 镜像没同步"。
+
+### Suggested Action
+1. 安装时显式放行脚本：`npm install -g pnpm@12 --allow-scripts=pnpm`；
+2. 若 `pnpm -v` 为空但 `pnpm.cmd -v` 正常，改 `pnpm.ps1` 两处调用为
+   `& "$basedir/node_modules/pnpm/pnpm$exe" $args`（注意 `npm install -g pnpm` 会重新生成坏 shim，需重修）；
+3. 想彻底绕开 npm shim，用官方原生安装（不依赖 Node）：
+   `$env:PNPM_VERSION="next-12"; Invoke-WebRequest https://get.pnpm.io/install.ps1 -UseBasicParsing | Invoke-Expression`；
+4. 已有 pnpm ≥11.10 时最简单：`pnpm self-update next-12`（注意项目若用 `packageManager` 字段钉版本，
+   self-update 只改钉子不装全局）；
+5. 判断"装没装上"不要只看命令有无报错，用 `pnpm -v` 的实际输出做断言；
+   无输出等同于失败，即使 exit code 是 0。
+
+### Resolution
+2026-08-31：`npm install -g pnpm@12 --allow-scripts=pnpm` 装上 12.1.0，
+再手工修好 `pnpm.ps1` 的 `$exe` 拼接，`pnpm -v` 输出 `12.1.0`。
+环境：Windows / Node v22.23.2 / npm 12.0.2 / registry 为 npmmirror 镜像。
