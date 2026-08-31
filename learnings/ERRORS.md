@@ -90,6 +90,37 @@ See Also: PB-20260828-001
 ### Resolution
 2026-08-28 同会话内补回显式 `collections` 后构建恢复正常（9.02s），产物图标 CSS 断言全部命中。
 
+## [ERR-20260831-002] UnoCSS 换 presetWind4 后自定义 theme key 静默失效
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: unocss, preset-wind4, theme, migration
+
+### Summary
+`presetWind3` → `presetWind4` 只改了导入名，`vue-tsc` 与 `vite build` 全部通过，但配置里自定义过的
+theme key 有一部分被无声丢弃：工具类照样生成，取到的却是预设默认值。
+
+### Details
+- 场景：把 tauri-vue3-template 的 `presetWind3` 换成 `presetWind4`（unocss 66.8.1），配置里只自定义了
+  `theme.colors`（EP 调色板），未触及任何改名 key，因此本次**没有**实际踩到样式回退；
+- 风险来源：presetWind4 调整了一批 theme key 命名——`fontFamily→font`、`borderRadius→radius`、
+  `easing→ease`、`boxShadow→shadow`、`breakpoints→breakpoint`、`transitionProperty→property`、
+  `container.maxWidth→containers.maxWidth`、`fontSize/lineHeight/letterSpacing` 移入 `text.*`、
+  尺寸类统一走 `spacing`；
+- 危害：这些 key 既不是类型错误（Theme 类型宽松），也不是构建错误，表现是「样式悄悄变了」，
+  排查时不会往配置漂移上想。
+
+### Suggested Action
+1. 切换 preset 前先按官方 Wind4 文档的 theme key 对照表，把 `uno.config.ts` 的 `theme` 逐项改名；
+2. 改完用产物断言兜底，而不是只看构建是否通过：搜主题变量是否真的进了 CSS
+   （如 `--colors-primary`、改名后 key 对应的 `--radius-*`），并确认旧的 `theme()` 指令无残留；
+3. 相关 preset 顺带处理：`presetRemToPx` 已内置可删，`presetLegacyCompat` 因 oklch 明确不兼容必须移除。
+
+### Resolution
+2026-08-31：本项目仅 `theme.colors` 有自定义，无需改名；按上述断言（`--colors-primary` /
+`--spacing:` / `@property --un-text-opacity` / `background-color:revert` 命中，`theme(` 残留 0）
+验证切换生效，`pnpm build` 通过。完整迁移清单见 PB-20260828-001 第 1、7 节。
+
+See Also: PB-20260828-001
+
 ## [ERR-20260831-001] UnoCSS 提取器会把源码和注释里的图标前缀字面量当成类名
 
 **Logged**: 2026-08-31 | **Status**: resolved | **Tags**: unocss, preset-icons, extractor, false-positive

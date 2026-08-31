@@ -166,4 +166,4 @@ node -e "const fs=require('fs');const p=fs.readdirSync('dist/assets').find(f=>f.
 9. presetAttributify 与 Element Plus 的布尔属性（`text` / `circle` / `plain` / `round`）实测不冲突，
    不会生成 `[text=""]` 之类的属性选择器。
 7. 切到 presetWind4 后自定义 theme key 用了旧名（`fontFamily` / `borderRadius` / `boxShadow` …）→ 不报错、静默失效，
-   按 1.1 表格逐个改名（ERR-20260831-001）。
+   按 1.1 表格逐个改名（ERR-20260831-002）。

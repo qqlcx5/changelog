@@ -33,7 +33,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 5 | 2026-08-31 |
+| errors | learnings/ERRORS.md | 6 | 2026-08-31 |
 | learnings | learnings/LEARNINGS.md | 2 | 2026-08-26 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 <!-- END:learnings -->
