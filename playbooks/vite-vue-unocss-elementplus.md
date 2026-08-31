@@ -6,7 +6,7 @@ tags: [vite, vue3, unocss, element-plus, sass]
 status: verified
 source: conversation:2026-08-28
 created: 2026-08-28
-updated: 2026-08-28
+updated: 2026-08-31
 ---
 
 # Vite + Vue3 + Element Plus 项目的 UnoCSS 生产级配置
@@ -25,12 +25,47 @@ unocss 导出：presetMini presetWind3 presetWind4 presetUno(废弃) presetWind(
              transformerDirectives transformerVariantGroup transformerCompileClass extractorSplit
 ```
 
-唯一需要额外装的是重置样式 `@unocss/reset`（本文用 `preflights` 内联替代，见第 5 节）。
+**不需要**额外装 `@unocss/reset` / `normalize.css`：`presetWind4` 内置了 Tailwind4 版 reset（见第 1、5 节）。
 
-## 1. presetUno / presetWind 已废弃 → 用 presetWind3
+## 1. presetUno / presetWind 已废弃 → 直接用 presetWind4
 
-官方 INFO：`@unocss/preset-wind` 和 `@unocss/preset-uno` 已被废弃并重命名为 `@unocss/preset-wind3`。
-新项目直接 `presetWind3()`；`presetWind4` 是 Tailwind v4 对齐版（oklch / cascade layers），老语法迁移成本更高，按需选。
+官方 INFO：`@unocss/preset-wind` 和 `@unocss/preset-uno` 已被废弃并重命名为 `@unocss/preset-wind3`，
+当前推荐是 `@unocss/preset-wind4`（Tailwind4 对齐：内置 reset + 主题 CSS 变量 + `@property`）。
+它对 presetWind3 兼容，工具类写法不用改，换导入名即可：
+
+```ts
+presetWind4({
+  dark: "class",                 // 默认值就是 'class'，与 Element Plus 的 <html class="dark"> 天然一致
+  preflights: {
+    reset: true,                 // 默认 true：内置 reset，无需 @unocss/reset
+    theme: "on-demand",          // 默认 'on-demand'：只生成被用到的 --colors-* / --spacing 等主题变量
+  },
+})
+```
+
+### 1.1 presetWind3 → presetWind4 的 theme key 改名
+
+只影响在 `uno.config.ts` 里自定义过的 key，工具类写法不变：
+
+| presetWind3 | presetWind4 |
+|---|---|
+| `fontFamily` | `font` |
+| `fontSize` / `lineHeight` / `letterSpacing` | 移入 `text.fontSize` / `text.lineHeight` / `text.letterSpacing`（或继续用 `leading-*` / `tracking-*`） |
+| `borderRadius` | `radius` |
+| `easing` | `ease` |
+| `breakpoints` / `verticalBreakpoints` | `breakpoint` / `verticalBreakpoint` |
+| `boxShadow` | `shadow` |
+| `width` / `height` / `maxWidth` / `minHeight` … | 统一走 `spacing` |
+| `transitionProperty` | `property` |
+| `container.maxWidth` | `containers.maxWidth` |
+
+只配了 `theme.colors`（本文第 4 节的做法）则**完全不受影响**。
+
+### 1.2 不再需要的包
+
+- `presetRemToPx`：能力已内置于 presetWind4（用 `preflights.theme.process` + `postprocess: [createRemToPxProcessor()]`，
+  从 `@unocss/preset-wind4/utils` 导入）。
+- `presetLegacyCompat`：presetWind4 用 oklch 色彩模型，**明确不兼容**，不要一起用。
 
 ## 2. presetIcons：必须显式写 collections
 
@@ -75,8 +110,8 @@ transformers: [transformerDirectives(), transformerVariantGroup()]
 
 ## 5. preflight 冲突：button 背景被刷成 transparent
 
-`presetWind3` 默认带 preflight，其中 `button,[type=button]{background-color:transparent}` 会和 UI 框架冲突。
-官方为此提供 `@unocss/reset/tailwind-compat.css`（去掉该条重写）。不想多装依赖就内联等价补丁：
+`presetWind4` 内置 reset 同样带 `button,input,select,optgroup,textarea,::file-selector-button{background-color:transparent}`，
+会和 UI 框架冲突。官方为此提供 `@unocss/reset/tailwind-compat.css`（去掉该条重写）。不想多装依赖就内联等价补丁：
 
 ```ts
 preflights: [{
@@ -87,6 +122,9 @@ button, [type='button'], [type='reset'], [type='submit'] {
 }`
 }]
 ```
+
+**层序保证覆盖**：presetWind4 新增三个层，order 为负——`properties(-200) < theme(-150) < base(-100)`。
+自定义 `preflights` 不带 layer 时落在 order 0，排在 `base` 之后，因此上面这段补丁能盖掉内置 reset，无需 `!important`。
 
 ## 6. 提取范围与动态类名
 
@@ -106,6 +144,10 @@ pnpm exec vite build                 # 注意日志里的 [unocss] failed to loa
 # 产物断言
 $c = [IO.File]::ReadAllText((Get-ChildItem dist/assets/*.css | Select-Object -First 1).FullName)
 $c.Contains("i-tabler-rocket"); $c.Contains("revert"); $c.Contains("409eff")
+
+# presetWind4 专属断言（缺一个就说明没真正切过去；最后一项应为 0）
+node -e "const fs=require('fs');const p=fs.readdirSync('dist/assets').find(f=>f.startsWith('index-')&&f.endsWith('.css'));const t=fs.readFileSync('dist/assets/'+p,'utf8');const keys=['@property --un-text-opacity','--colors-primary','--spacing:','background-color:revert','theme('];for(const k of keys)console.log(k,t.split(k).length-1)"
+# → 依次应输出 1, >0, 1, 1, 0
 ```
 
 ## 坑位清单
@@ -116,3 +158,12 @@ $c.Contains("i-tabler-rocket"); $c.Contains("revert"); $c.Contains("409eff")
 4. js/ts 里的类名常量默认不被扫描。
 5. 全量引入 EP：产物约 +370 KB CSS / +1 MB JS，要瘦身再上 `unplugin-vue-components` 按需引入。
 6. 装了 `virtual:uno.css` 但没在 `vite-env.d.ts` 里 `declare module "virtual:uno.css"` → TS2307。
+7. 提取器不区分代码与注释，源码/注释里出现图标前缀字面量也会触发
+   `failed to load icon`（见 ERR-20260831-001）。
+8. `@apply` 在**外部 .scss** 和 SFC `<style lang="scss">` 里都能用（实测 dev 与 build 均已展开）；
+   VS Code 的 SCSS 语言服务会报 `unknownAtRules` 误警，加 `.vscode/settings.json`
+   配 `scss.lint.unknownAtRules: "ignore"` 消除。
+9. presetAttributify 与 Element Plus 的布尔属性（`text` / `circle` / `plain` / `round`）实测不冲突，
+   不会生成 `[text=""]` 之类的属性选择器。
+7. 切到 presetWind4 后自定义 theme key 用了旧名（`fontFamily` / `borderRadius` / `boxShadow` …）→ 不报错、静默失效，
+   按 1.1 表格逐个改名（ERR-20260831-001）。

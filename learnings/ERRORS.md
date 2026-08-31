@@ -89,3 +89,33 @@ See Also: PB-20260828-001
 
 ### Resolution
 2026-08-28 同会话内补回显式 `collections` 后构建恢复正常（9.02s），产物图标 CSS 断言全部命中。
+
+## [ERR-20260831-001] UnoCSS 提取器会把源码和注释里的图标前缀字面量当成类名
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: unocss, preset-icons, extractor, false-positive
+
+### Summary
+构建日志出现 `[unocss] failed to load icon "tabler-"`（集合名后为空图标名）。
+排查发现触发源不是模板，而是 JS 表达式 `icon.slice("i-tabler-".length)` 与本人在注释里写的
+`"i-tabler-"` 这个**字符串字面量**——提取器把整个文件当纯文本扫描，任何形如 `i-xxx-` 的片段都会被当作候选类名。
+
+### Details
+- 场景：图标画廊组件把图标存成完整类名数组 `["i-tabler-rocket", ...]`，模板里为了显示图标名写了
+  `{{ icon.slice("i-tabler-".length) }}`；
+- 第一次修：改成数组元素为 `{ name, cls }`，模板不再 slice —— **告警依旧存在**；
+- 二次定位：真正的残留源是我在 `IconItem` 接口上方新加的注释，注释正文中出现了带引号的 `"i-tabler-"`；
+- 根因：UnoCSS 默认提取器（extractorSplit）按分隔符切词，不做语法分析，不区分字符串、标识符还是注释；
+  `warn: true` 时每次都会打印一行 `failed to load icon`，但**不影响构建结果、不失败退出**，极易被忽略；
+- 危害：告警淹没真实问题——真写错图标名时的告警和这条假告警长得一模一样，等于把 `warn: true` 的保险丝烧了。
+
+### Suggested Action
+1. 图标数据一律用 `{ name, cls }` 结构，模板直接取 `name`，不做字符串截取；
+2. **注释里也不要写图标前缀字面量**（写成"图标前缀"之类描述，或让前缀不紧跟在引号后）；
+3. 排查此类告警：对整个 `src` 搜 `i-<集合名>-[引号/反引号/空格]`，命中即为触发源，不要只盯模板；
+4. 每次构建后把 `failed to load icon` 当作**必须清零**的信号，否则 `warn: true` 失去意义。
+
+### Resolution
+2026-08-31：把注释里的前缀字面量改写为描述性文字后，构建日志 `failed to load icon` 清零，
+产物图标数量 123 且断言全通过。
+
+See Also: ERR-20260828-002, PB-20260828-001
