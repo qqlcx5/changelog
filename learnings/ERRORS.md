@@ -380,3 +380,36 @@ See Also: PB-20260825-001
 2026-08-31：确认根因为本地后端进程落后源码（当天 13:35 刚提交 pageSchema 契约批次），指导重启后端即可恢复；前端 `goDetail` 增加主键判空响亮失败提示，ESLint 0 问题。项目侧经验已同步 agent memory（common_pitfalls_experience）。
 
 See Also: PB-20260825-001
+
+---
+
+## [ERR-20260831-009] pageSchema 濂戠害"涓嶇敓鏁?锛氱粦瀹氳〃 tenant_id 鍐欓敊绉熸埛锛屾煡璇㈡案涓嶅懡涓?
+
+**Logged**: 2026-08-31 | **Status**: resolved | **Tags**: qcm-v2, pageschema, multi-tenant, dml
+
+### Summary
+
+琛ㄥ崟寤烘ā DML 鍏ㄩ儴鎵ц鎴愬姛锛岄〉闈㈠嵈濮嬬粓璧板洖閫€閫昏緫锛堝绾︽湭鐢熸晥锛夈€傛牴鍥狅細`sys_menu_form_column.tenant_id` 鍐欐垚浜?`'10002'`锛岃€岃繍琛屾湡 `getMenuFormCache` 鎸?`menu_code + 褰撳墠鐧诲綍鐢ㄦ埛绉熸埛` 绮剧‘鏌ヨ锛宎dmin 绉熸埛鏄?`'10000'`锛岀粦瀹氭案杩滄煡涓嶅埌 鈫?`restricted=false` 鈫?鍓嶇璧板師閫昏緫銆?
+
+### Details
+
+- 鍦烘櫙锛歈CM V2 md 妯″潡 7 椤垫帴鍏?pageSchema 濂戠害锛坄usePageSchema` + `/sys/pageSchema`锛夛紝閰嶅 9 浠借〃鍗曟ā鍨?DML锛坰ys_model_table / sys_model_table_column / sys_model_table_column_query / sys_menu_form_column锛夊叏閮ㄦ墽琛岋紝椤甸潰鏃犱换浣曞彉鍖栵紱
+- 鍒ゅ畾閾撅細鍓嶇 `usePageSchema` 鈫?`GET /sys/pageSchema?menuCode=xxx` 鈫?`PageSchemaAssembler.assemble` 鈫?`FormColumnPermissionCalculator.calculate` 鈫?`SysMenuFormColumnService.getMenuFormCache`锛氬厛鏌?Redis Hash `sys:cache:menuForm:{tenantId}::menuForm`锛坒ield=menuCode锛夛紝miss 鍐嶆煡 `sys_menu_form_column WHERE menu_code=? AND tenant_id=CacheTenantUtils.getTenantId()`锛涙煡涓嶅埌鍗宠繑鍥炵┖ 鈫?`restricted=false`锛?
+- 鏍瑰洜锛歵enant_id 鍐欏叆 `'10002'`锛堝綋鏃惰鍒ら粯璁ょ鎴凤紝瀹為檯鏄剼鎵嬫灦 SQL 閲屾棤閿″垎鍏徃鏃х鎴风殑娈嬬暀鍊硷級锛涜€?admin 鐢ㄦ埛锛坰ys_user.id='1'锛塼enant_id='10000'锛宍DEFAULT_TENANT_ID="10000"`锛宻ys_tenant 鍏ㄩ儴璁板綍 tenant_id 鍒椾篃鏄?'10000'锛?
+- 闅愯棌鎬ф潵婧愶細鈶?澶氱鎴锋彃浠?IGNORE_TABLES 宸插拷鐣?`sys_menu_form_column`锛屼笉浼氳鑷姩鎷肩鎴锋潯浠讹紝绉熸埛鍖归厤瀹屽叏闈犳墜鍐?`.eq(tenantId)`锛岄厤缃敊鍊兼棤浠讳綍鎶ラ敊锛涒憽 DML 鎵ц鎴愬姛銆佽彍鍗曞瓨鍦ㄣ€佸缓妯″垪榻愬叏锛屾墍鏈夐潤鎬佹鏌ラ兘缁跨伅锛涒憿 "鏈粦瀹?鏄璁′笂鐨勬甯稿洖閫€锛堝墠绔?console.error 涓€琛岀孩瀛楋級锛屼笉鎶ラ敊锛?
+- 浜ゅ弶楠岃瘉鏂规硶锛欶12 鎺у埗鍙扮湅 `[ProTable][pageSchema] 鎺ュ彛鍘熷杩斿洖` 鐨?`restricted` 涓?`formsCount`鈥斺€攆alse/0 鍗崇粦瀹氭湭鍛戒腑锛?
+- 闄勫甫鍙戠幇锛氱洿鎺ユ墽琛?SQL 涓嶈蛋鍚庣 saveBinds锛屼笉浼氳Е鍙?`evictByMenuCode` 娓呯紦瀛橈紱鑻ヤ箣鍓嶆浘鍛戒腑杩囩粦瀹氾紝Redis 閲屾湁鏃у€硷紝鏀瑰簱鍚庡繀椤绘竻缂撳瓨鎵嶇敓鏁堛€?
+
+### Suggested Action
+
+1. 鍐欎换浣曞惈 tenant_id 鐨?DML 鍓嶅厛鏌ュ綋鍓嶇櫥褰曡处鍙风鎴凤細`SELECT login_name, tenant_id FROM sys_user WHERE login_name='<鐧诲綍鍚?'`锛屼笉瑕佸嚟"榛樿绉熸埛"鍗拌薄鍐欐锛?
+2. 濂戠害鏈敓鏁堟爣鍑嗘帓鏌ュ簭锛欶12 鐪?restricted 鈫?鏌?`sys_menu_form_column`锛坢enu_code/tenant_id/del_flag锛夆啋 鏌ョ櫥褰曠敤鎴风鎴?鈫?娓?Redis `sys:cache:menuForm:*`锛?
+3. 缁曡繃 SQL 鐩存敼搴撴椂璁板緱鍚屾娓呯紦瀛橈紙redis-cli DEL 鎴栭噸鍚悗绔級锛屽惁鍒欐棫缂撳瓨缁х画鍛戒腑锛?
+4. 寤烘ā涓夎〃锛坰ys_model_table/column/query锛夊湪澶氱鎴锋彃浠跺拷鐣ュ悕鍗曢噷锛屽彧鏈?sys_menu_form_column 鏈夋墜鍐欑鎴疯繃婊も€斺€旇繖鏄敮涓€鐨勭鎴锋晱鎰熺偣銆?
+
+### Resolution
+
+2026-08-31锛? 浠借〃鍗曟ā鍨?DML 鐨?tenant_id 缁熶竴淇涓?'10000'锛? 涓?md 椤?+ plm/bi/scm鍟嗗搧璁㈠崟瑙勫垝鍚屾壒娆★級锛屽瓨閲忓簱 UPDATE + 娓?Redis 缂撳瓨鍚庡绾︾敓鏁堛€傞」鐩晶缁忛獙宸插悓姝?agent memory銆?
+
+See Also: ERR-20260831-008, PB-20260825-001
+
