@@ -487,3 +487,28 @@ See Also: PB-20260901-001
 See Also: PB-20260827-001
 
 ---
+
+## [ERR-20260901-003] agent 维护的状态文件产物计数虚报——声称 47 实测 43，旧数字同样虚且沿袭放大
+
+**Logged**: 2026-09-01T14:07:38 | **Status**: pending | **Tags**: harness, agent, metadata, drift, audit
+
+### Summary
+AI 会话生成的 harness 状态文件（progress.md / session-handoff.md）里「产物数量」声称 47 个（26 md + 15 脚本 + 3 JSON + 2 init + 1 冻结清单），`git ls-files harness/` 实测 43（24 + 14 + 3 + 2）；分项还把 legacy-freeze.json 既算进「3 个 JSON」又单列为「1 份冻结清单」双重计数；追溯旧口径声称 49 实为 46——数字漂移跨会话沿袭并放大。
+
+### Details
+- 根因：agent 按上一轮数字做增量推算（49 − 3 md − 2 py + 1 py + 1 json ≈ 47）而非实测，三个环节叠加失真——基线本身已虚 + 推算引入新误差 + 分项口径重复计数；
+- 危害：这类数字会被后续会话当作事实引用（「产物 47 个」进入 session-handoff 状态行与交接记录），错误随状态文件繁殖；
+- 发现方式：对抗式审查执行「声称的事实必须实测」——`git ls-files harness/` 按扩展名分组统计，与文档声称逐项对账。
+
+### Suggested Action
+1. agent 状态文件里任何计数类断言（产物数 / 文件数 / 规则数 / 命中数）禁止从上轮数字推算，必须命令实测（`git ls-files` 分组统计、脚本输出）；
+2. 分项口径唯一化：每个文件只归入一个分项（JSON 与「冻结清单」互斥），总数 = 分项之和可自检；
+3. 对抗式审查清单固定加一条：声称的数字逐个用命令复核，报「命中数==冻结数」这类成对数字时两侧都要验。
+
+See Also: PB-20260901-002
+
+### Resolution
+
+2026-09-01：对抗式审查发现后当场订正 progress.md / session-handoff.md（47→43，分项 24/14/3/2），并在数字旁标注「经 git ls-files 实测」来源，防止下一会话再次沿袭虚数。
+
+---
