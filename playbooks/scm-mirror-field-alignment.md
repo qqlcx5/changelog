@@ -6,7 +6,7 @@ tags: [qcm-v2, protable, field-mapping, jackson]
 status: verified
 source: conversation:2026-08-25
 created: 2026-08-25
-updated: 2026-08-31
+updated: 2026-09-01
 ---
 
 # QCM V2 镜像页字段口径对齐清单（SCM & MDP / jp-ui + 后端契约）
@@ -99,3 +99,13 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 **回退模式陷阱**：契约未加载时（典型如 `sys_menu_form_column.tenant_id` 与环境租户不匹配被判定"未绑定"），
 页面退回前端列 `search` + 实体 `@Query` 绑定，此时**只有带 `@Query` 的字段能筛**。契约里配了筛选、
 实体却没 `@Query` 的字段静默失效——不报错、查不出差异，比 500 更难发现。新增契约筛选项时顺手确认实体有 `@Query`。
+
+## 8. 契约白名单静默收敛：页面有列 ≠ 契约有列（2026-09-01 增补）
+
+> 来源：九页 tsv 对抗式审查实战（商品主数据 zsyear / 备案供应商股东 / 样品信息 12 列）。
+
+第 7 节四份清单之外还有第五份：**前端 columns 数组**。契约生效时 `applySchemaColumns` 按 `visible_columns` 白名单收敛列集合——页面写了列但契约（列元数据 + visible_columns）没登记，该列**静默消失**（不报错、不告警），契约恰好未加载时自测会直接漏掉。核对动作：`页面 columns field 集合 − visible_columns = ∅` 且顺序一致；契约新增列时同步三处：`sys_model_table_column`（sort 连续重排）、`visible_columns`（顺序 = 页面列顺序）、前端 columns。
+
+**双向核查**：权威口径表标记「删除」的字段，页面仍展示即违规——缺列要补，多列要删；物理列与契约列元数据可保留（历史数据不丢），仅从 visible_columns 与前端 columns 移除。
+
+**码值列的「文本」筛选口径**：枚举来自物理表注释或源系统时，新建系统字典（`sys_dict_type`/`sys_dict_value`，value=源码值），展示走字典翻译、筛选走码值 IN（契约 compare_type=IN + ref_code 指向字典），与既有字典列口径对齐；实体侧补 `@Query(type = QueryType.IN)` 保回退模式可用。
