@@ -413,3 +413,41 @@ See Also: PB-20260825-001
 
 See Also: ERR-20260831-008, PB-20260825-001
 
+---
+
+## [ERR-20260901-001] prettier.enable=false 静默废掉全部 defaultFormatter，格式化"配了但不生效"
+
+**Logged**: 2026-09-01 | **Status**: pending | **Tags**: vscode, prettier, settings, silent-failure
+
+### Summary
+
+`settings.json` 里同时存在 `prettier.enable: false` 和十余处
+`"editor.defaultFormatter": "esbenp.prettier-vscode"`，后者全部静默失效——
+设置 UI 不报错、文件不飘黄，只有按 `Format Document` 时提示"没有安装格式化程序"。
+
+### Details
+
+- 场景：审查一份 622 行的 `settings.json`（antfu 模板 + Cursor 方案混抄）。
+  antfu 方案主张"用 ESLint 统一格式化"，带上了 `prettier.enable: false`；
+  Cursor 方案依赖 Prettier 当 `defaultFormatter`，于是 `[javascript]` / `[typescript]` /
+  `[css]` / `[scss]` / `[jsonc]` / `[markdown]` / `[yaml]` / `[toml]` / `[shellscript]` 等
+  13 处指向 `esbenp.prettier-vscode`。两套方案叠加后互相抵消；
+- 插件官方说明：`prettier.enable` 默认 `true`，**改动后必须重启 VS Code**。
+  这解释了为什么"改过一次没生效就被忽略"——重启前看不到差异；
+- 误导点：设置项本身合法、`[lang]` 块也合法，校验不出任何 JSON / schema 错误；
+  失效点在**跨段落的引用关系**里，只能靠"两个开关是否指向同一套方案"的人脑核对发现；
+- 一般化形态：**任何 `xxx.enable: false` 都是全局否决**，
+  它不挑语言、不挑作用域，所有指向该 provider 的配置一起失效。
+
+### Suggested Action
+
+1. 改完含 `enable` 的开关后一律 `F1` → `Developer: Reload Window` 再验证；
+2. 验证不看配置看行为：打开代表性文件 → `Format Document` →
+   状态栏是否提示"没有安装格式化程序"；
+3. 审查 `settings.json` 第一步就全局搜 `enable": false`，
+   逐条反查它的引用点（见 PB-20260901-001 第 1 节）；
+4. 决定方案时二选一，不要两个都留：要么删 `prettier.enable` 让 Prettier 接管格式化，
+   要么把所有 `defaultFormatter` 改为 ESLint 并让 ESLint 承担 fix。
+
+See Also: PB-20260901-001
+
