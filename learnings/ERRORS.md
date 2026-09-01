@@ -417,7 +417,7 @@ See Also: ERR-20260831-008, PB-20260825-001
 
 ## [ERR-20260901-001] prettier.enable=false 静默废掉全部 defaultFormatter，格式化"配了但不生效"
 
-**Logged**: 2026-09-01 | **Status**: pending | **Tags**: vscode, prettier, settings, silent-failure
+**Logged**: 2026-09-01 | **Status**: resolved | **Tags**: vscode, prettier, settings, silent-failure
 
 ### Summary
 
@@ -450,4 +450,15 @@ See Also: ERR-20260831-008, PB-20260825-001
    要么把所有 `defaultFormatter` 改为 ESLint 并让 ESLint 承担 fix。
 
 See Also: PB-20260901-001
+
+### Resolution
+
+2026-09-01：拿到 antfu 原版配置原文（`cdn.jsdelivr.net/gh/antfu/vscode-settings@main/.vscode/settings.json`）
+坐实了根因——antfu 的 `prettier.enable: false` 上一行就是他自己的注释
+`// I only use Prettier for manually formatting`，且他**没有给任何语言设
+`editor.defaultFormatter: esbenp.prettier-vscode`**，格式化由 ESLint 承担。
+被审查的文件把"antfu 的开关"和"Cursor 方案的 formatter"拼在一起，两套方案互相抵消。
+处置：注释掉 `prettier.enable`，13 处 formatter 恢复；同时修掉
+`[vue]` 指向 `vscode.typescript-language-features`（不能格式化 Vue SFC，同类死配置）。
+核对要点沉淀为 PB-20260901-001 第 1.1 节。
 

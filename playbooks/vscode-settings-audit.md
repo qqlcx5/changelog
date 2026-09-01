@@ -30,6 +30,42 @@ updated: 2026-09-01
 验证方法：打开一个该语言文件 → `F1` → `Format Document` → 看状态栏右下角是否弹出"没有安装格式化程序"。
 **没有格式化程序 = 冲突已发生，不要靠"我配了 formatter"来判断。**
 
+### 1.1 照抄 antfu / 他人配置前的"隐藏前提"核对
+
+一份名家配置能跑通，靠的是**整套自洽**，抄其中一半必然出错。核对三处：
+
+1. **`prettier.enable: false` 的配套前提**：antfu 原版注释原文是
+   `// I only use Prettier for manually formatting`，且他**没有给任何语言设
+   `editor.defaultFormatter: esbenp.prettier-vscode`**——格式化交给 ESLint。
+   只抄 `prettier.enable: false`、又抄别处的 `defaultFormatter: prettier`，两套方案互相抵消。
+2. **`search.exclude` 的目录语义**：antfu 原版排掉 `**/assets` / `**/public` / `**/*.svg`，
+   在他的项目里是产物；在 uni-app / 小程序项目里 `src/images` 下几百个 svg 是**源码**，
+   照抄会让全局搜索搜不到真实源码。按项目判定，不要照抄。
+3. **`workbench.preferredLightColorTheme` 必须是真浅色主题**：antfu 填 `Vitesse Light`。
+   填深色主题（如 `One Dark Pro`）等于浅色模式不可用。
+
+取原始配置的方法（raw 链接常 404 或超时，jsDelivr 可用）：
+
+```
+https://cdn.jsdelivr.net/gh/<owner>/<repo>@<branch>/<path>
+# 例：https://cdn.jsdelivr.net/gh/antfu/vscode-settings@main/.vscode/settings.json
+```
+
+另外：**fileNesting 不要全量照抄**。antfu 的 `explorer.fileNesting.patterns` 有 60+ 条，
+其中大量是 .NET / Rust / Svelte / LaTeX 规则。只留与本项目技术栈相关的 8~10 条，
+否则大仓（900+ 文件）的文件树渲染会明显变慢。
+
+## 1.2 改完会被"回退"的坑：注释与值必须同步改
+
+审查完的配置常被用户从备份粘贴回去，或手工改值时只改一半，产生**注释与值矛盾**：
+
+- `"files.eol": "\r\n"` 后面却写着"与 .editorconfig 的 lf 保持一致"；
+- `"update.mode": "none"` 后面却写着"已由 none 改为 manual"。
+
+这类矛盾的危害是：下次读文件时不敢信注释，又不敢信值，只能重新查一遍。
+**收尾时必须做一次机械核对**：全文搜注释里的 `[优化]` / `[修复]` / `[新增]`，
+逐条确认注释描述与实际值一致。
+
 ## 2. 清死配置（对当前 OS / 环境不生效，纯噪音）
 
 - macOS only：`window.nativeTabs`、`terminal.integrated.*` 的部分 mac 专属项。
