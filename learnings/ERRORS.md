@@ -462,3 +462,28 @@ See Also: PB-20260901-001
 `[vue]` 指向 `vscode.typescript-language-features`（不能格式化 Vue SFC，同类死配置）。
 核对要点沉淀为 PB-20260901-001 第 1.1 节。
 
+
+## [ERR-20260901-002] harness-creator 的 validate-harness.mjs 把「嵌套目录 + 中文」harness 误判成 20/100
+
+**Logged**: 2026-09-01T12:04:44 | **Status**: pending | **Tags**: harness, agent, false-negative, scoring, i18n
+
+### Summary
+结构评分器只在仓库根查 7 个固定文件名，且只匹配英文关键词；产物放在 `harness/` 子目录、标题写中文的项目会拿到 20/100 的假阴性，bottleneck 还会被误导到「instructions」。
+
+### Details
+- `loadHarnessFiles()` 对 `AGENTS.md` / `feature_list.json` / `progress.md` / `session-handoff.md` / `init.sh` 逐个做 `path.join(root, name)`，**不递归子目录**。QCM V2 把全部产物放在 `harness/`，仓库根只留一个 44 行纯路由的 `AGENTS.md`（无任何条文，符合渐进披露设计）→ 只有「Agent instruction file exists」一条通过，总分 20/100。
+- `structuredHas()` 先抽取标题 / 列表 / 表格 / 粗体行，再匹配英文短语：`Startup Workflow`、`Definition of Done`、`One feature at a time`、`Last Updated`、`Recommended Next Step` 等。中文标题 `## 核心工作流（Core Workflow）`、`## 当前状态`、`## 下一步` 一处都不命中。
+- `jsonFeatureList()` 要求每条 feature 有字符串 `name` + `description`；项目用 `title` + `rationale`（语义等价且更丰富，另含 `definition_of_done` / `scope_boundary` / `context_to_read`）→ 判为「tracker is invalid」。
+- 实测对照：同一套产物，`--target d:\Desktop\qcmV2` = 20/100；`--target d:\Desktop\qcmV2\harness` = 44/100（instructions 1/5、scope 1/5、state 3/5、verification 3/5、lifecycle 3/5）。
+- 误判的代价方向是错的：报告会指向「instructions 是瓶颈，重写指令层」，而这个 harness 的指令层恰恰是它最强的一环（<120 行导航图 + 任务导航表 + 分层门禁）。真正缺口——指令文件没有路由到状态产物、没写 WIP 上限与 scope 边界、没写会话收尾流程——被淹没在 12 条失败里看不出来。
+
+### Suggested Action
+1. 跑分前先确认产物真正所在的目录，把那个目录传给 `--target`，不要默认传仓库根；
+2. 中文 harness 用中英并列标题（`## 核心工作流 / Startup Workflow`），一次消掉 4~5 条关键词失败，对人类读者无副作用；
+3. 把失败项按「关键词误判」与「结构真缺口」分成两堆，只对后者动手；
+4. 判定真缺口的可操作标准：假设一个全新会话的智能体只读 `AGENTS.md`——它能否自己找到 `progress.md` / `feature-list.json` / `session-handoff.md`？能否知道 WIP 上限、scope 边界在哪、会话结束要做什么？任一项答不上来就是真缺口，与评分无关；
+5. `feature-list.json` 若必须过 `jsonFeatureList()`，补 `name` / `description` 字段即可（或保留 `title` / `rationale` 并接受该项失败，不要为此削弱现有 schema）。
+
+See Also: PB-20260827-001
+
+---
