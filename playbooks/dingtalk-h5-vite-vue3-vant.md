@@ -1,0 +1,171 @@
+---
+id: PB-20260902-003
+type: playbook
+title: Vite + Vue3 + Vant 接入钉钉 H5 微应用（v1.0 新模型 + mock 层服务端签名）
+tags: [dingtalk, vite, vue3, jsapi, mock]
+status: verified
+source: conversation:2026-09-02
+created: 2026-09-02
+updated: 2026-09-02
+---
+
+# Vite + Vue3 + Vant 接入钉钉 H5 微应用（v1.0 新模型）
+
+> 适用：纯 H5 脚手架（Vite + Vue3 + TS + Vant）做钉钉工作台内的 H5 微应用，需要 JSAPI 鉴权 + 免登。
+> 与 [PB-20260824-001](dingtalk-h5-microapp.md)（uniapp + 老模型）互补：本文是**新应用模型（clientId/clientSecret + `api.dingtalk.com/v1.0`）**，且签名服务直接落在 `vite-plugin-mock-dev-server` 的 mock 层，前端无需另起 Node 后端进程即可联调。
+> 实战已验证：`accessToken → jsapiTickets → SHA1 签名` 链路返回真实签名；免登接口到达钉钉并返回「不合法的临时授权码」（说明链路通，仅 code 是假的）。
+
+## 1. 依赖
+
+```bash
+pnpm add dingtalk-jsapi      # 当前 3.2.9
+```
+
+`dingtalk-jsapi` 是 `export =` 的 CJS 包，TS 下取整体类型的写法：
+
+```ts
+export type DingTalkSDK = typeof import('dingtalk-jsapi')
+// 动态 import 时 CJS 会被包一层 default
+const mod = await import('dingtalk-jsapi')
+const dd = (mod as unknown as { default?: DingTalkSDK }).default ?? mod
+```
+
+用动态 import 而非顶层 import：SDK 只在钉钉场景下需要，避免进主包；同时浏览器调试时不会因 SDK 初始化失败炸页面。
+
+## 2. 凭证切分（安全红线）
+
+| 变量 | 位置 | 说明 |
+|---|---|---|
+| `VITE_DING_CORP_ID` | `.env` / `.env.development` / `.env.production` | 会进前端产物，只放非敏感项 |
+| `VITE_DING_AGENT_ID` | 同上 | 同上 |
+| `VITE_DING_CLIENT_ID` | 同上 | 即 AppKey，非敏感 |
+| `DINGTALK_CLIENT_SECRET` | **`.env.local`（无 VITE_ 前缀）** | 服务端密钥，**永不进前端** |
+
+`.env.local` 必须被 gitignore 排除（多数脚手架的 `*.local` 已覆盖，用 `git check-ignore -v .env.local` 确认）。同时提交一份 `.env.local.example`（空值）给后续接手的人。
+
+mock 层（Node 端）读取服务端变量的写法：
+
+```ts
+import process from 'node:process'
+import { loadEnv } from 'vite'
+
+// loadEnv 第三参传空串 = 读取所有变量，不再只过滤 VITE_ 前缀
+const env = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '')
+export const DINGTALK_CLIENT_SECRET = process.env.DINGTALK_CLIENT_SECRET || env.DINGTALK_CLIENT_SECRET || ''
+```
+
+`import process from 'node:process'` 是必须的——antfu eslint 的 `node/prefer-global/process` 规则会报「Unexpected use of the global variable 'process'」。
+
+## 3. v1.0 新模型链路（4 个端点，全部实测）
+
+```
+1) POST https://api.dingtalk.com/v1.0/oauth2/accessToken
+   body: { appKey: clientId, appSecret: clientSecret }
+   → { accessToken, expireIn: 7200 }                 ← 应用级 token，缓存
+
+2) POST https://api.dingtalk.com/v1.0/oauth2/jsapiTickets
+   header: x-acs-dingtalk-access-token: <accessToken>
+   → { jsapiTicket, expireIn: 7200 }                 ← 缓存
+
+3) 本地签名（前端给 url，后端 sha1）
+   raw = `jsapi_ticket=${ticket}&noncestr=${nonceStr}&timestamp=${timeStamp}&url=${url}`
+   signature = sha1(raw)
+
+4) 免登：
+   POST https://api.dingtalk.com/v1.0/oauth2/userAccessToken
+   body: { clientId, clientSecret, code: authCode, grantType: 'authorization_code' }
+   → { accessToken, corpId, expireIn }
+   GET https://api.dingtalk.com/v1.0/contact/users/me
+   header: x-acs-dingtalk-access-token: <用户 accessToken>
+   → { nick, avatarUrl, mobile, openId, unionId, email, stateCode }
+```
+
+要点：
+- 老模型的 `gettoken` / `get_jsapi_ticket` / `topapi/v2/user/getuserinfo` 与新模型**不通用**，凭证形态不同（老模型 AppKey/AppSecret + agentId；新模型 clientId/clientSecret），别混用。
+- `contact/users/me` 的 path 参数传字面量 `me` 即当前授权人，省一次 unionId 查询。
+- token / ticket 都缓存 7200s，本地缓存提前 60s 过期，避免临界失效。
+
+## 4. 目录结构（可直接照搬）
+
+```
+mock/dingtalk-env.ts              # Node 端读服务端密钥
+mock/modules/dingtalk.mock.ts     # /api/dingtalk/jsapi-signature、/api/dingtalk/login
+src/config/dingtalk.ts            # corpId / agentId / clientId + jsApiList 常量
+src/api/dingtalk.ts               # 两个请求函数 + 类型
+src/utils/dingtalk.ts             # SDK 加载 / 环境检测 / 鉴权 / 免登
+src/pages/dingtalk/index.vue      # 调试 Demo 页
+```
+
+`vite-plugin-mock-dev-server` 默认扫描 `mock/**/*.mock.{ts,js,...}`，所以 `dingtalk-env.ts` 不会被当成 mock 文件注册，命名安全。
+
+## 5. 前端封装要点
+
+```ts
+// 鉴权：单例 + 失败可重试
+export function authDingTalk(): Promise<{ authed: boolean, signature: JsapiSignature | null }> {
+  if (!isInDingTalk()) return Promise.resolve({ authed: false, signature: null })
+  if (authPromise) return authPromise
+  authPromise = (async () => {
+    const dd = await loadDingTalkSDK()
+    const url = location.href.split('#')[0]      // 签名 url 必须去 hash
+    const signature = (await fetchJsapiSignature(url)).data
+    dd.config({
+      agentId: signature.agentId || DINGTALK_AGENT_ID,   // 用 truthy 兜底，防后端返回空串覆盖
+      corpId: signature.corpId || DINGTALK_CORP_ID,
+      timeStamp: signature.timeStamp,
+      nonceStr: signature.nonceStr,
+      signature: signature.signature,
+      type: 0,
+      jsApiList: DINGTALK_JS_API_LIST,
+    })
+    await new Promise<void>((resolve, reject) => {
+      dd.ready(() => resolve())
+      dd.error((err: unknown) => reject(new Error(formatDingTalkError(err))))
+    })
+    return { authed: true, signature }
+  })().catch((e) => { authPromise = null; throw e })   // 失败清空，允许下次重试
+  return authPromise
+}
+```
+
+- `isInDingTalk()` 用同步 UA 判断（`/DingTalk/i.test(navigator.userAgent)`），SDK 未加载时也可用。
+- `jsApiList` 里填**完整 API 名**（如 `device.geolocation.get`），而非调用链上的缩写。
+- 免登 `dd.getAuthCode({ corpId })` 不需要先 dd.config，但 scan / contact / geolocation 等必须先鉴权。
+
+## 6. 调试 Demo 页：浏览器降级
+
+关键设计：不在钉钉容器内时，每个 JSAPI 演示按钮**返回预置模拟数据**而不是抛错。这样普通浏览器就能把交互、日志面板、参数拼装全部跑通，只有真机才切真实能力。
+
+```ts
+function invoke(action: DemoAction) {
+  if (!inDingTalk) return Promise.resolve(action.mock)
+  return action.run()
+}
+```
+
+页面同时展示：`dd.env`（platform / platformSub / version / appType）、corpId/agentId/clientId、签名参数（带「真实签名 / 模拟签名」tag）、用户信息（带「模拟数据」tag）、调用日志（成功/失败 + 耗时 + JSON）。
+
+## 7. 联调与验证
+
+```bash
+npx vue-tsc --noEmit                                  # 类型检查
+npx eslint src mock                                    # lint
+npx vite --port 5193                                   # 起服务
+curl "http://localhost:5193/api/dingtalk/jsapi-signature?url=http%3A%2F%2Flocalhost%3A5193%2Fdingtalk"
+# → {"code":0,...,"data":{...,"mocked":false}}         mocked:false 说明拿到的是真实钉钉签名
+```
+
+- 真机调试需要先让页面公网可达（内网穿透 / ngrok），钉钉容器内访问不到开发机 `localhost`。
+- 免登在浏览器里必然失败（拿不到真实 authCode），靠 `DINGTALK_MOCK_FALLBACK=true` 降级返回模拟用户，保证链路可测。
+
+## 8. 坑点
+
+1. **密钥泄漏**：`VITE_` 前缀的变量会被打进产物。clientSecret 只能放 `.env.local` 且不带前缀，由 mock 层 / 真实后端读取。
+2. **`process` 全局**：mock 层里写 `process.env.X` 会触发 eslint `node/prefer-global/process`，改 `import process from 'node:process'`。
+3. **签名 url 不一致**：必须 `location.href.split('#')[0]`，前后端取同一个值；套件还要求含端口号一致。
+4. **`dd.config` 一次性**：同一页面生命周期内第二次调用被静默忽略，改完配置必须刷新页面重试。
+5. **后端空串覆盖**：`signature.agentId || DINGTALK_AGENT_ID` 用 truthy 兜底，否则后端漏配时传给钉钉的是空字符串。
+6. **Vant `van-tag` 没有 `size="mini"`**：Tag 只有 `large | medium`，写 `mini` 会类型报错；`van-button` 才有 mini。
+7. **后台 JSAPI 权限**：通讯录（contact.choose）、定位（geolocation.get）需单独申请权限，免登默认开通。报 errorCode 9 是签名问题，不是权限问题。
+
+See Also: PB-20260824-001
