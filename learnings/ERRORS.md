@@ -1,4 +1,4 @@
-# Errors — 命令失败与集成故障记录
+﻿# Errors — 命令失败与集成故障记录
 
 > 追加式分轨日志（id 前缀 `ERR`）。条目格式见 [WORKFLOW.md](../WORKFLOW.md) 第 4.2 节。
 > 同一 Pattern 复现 ≥3 次（See Also 链接计数）应提炼为 playbook（WORKFLOW.md 第 6 节）。
@@ -222,6 +222,8 @@ npm 12 默认拦截 `preinstall` 导致原生二进制没落地；npm 生成的 
 ### Resolution
 2026-08-31：改为对输出内容做断言后确认构建通过（`✓ built in 7.98s` / `9.53s`），
 产物 chunk 分布符合预期（vue / element-plus / lodash / vendor + 三个路由懒加载 chunk）。
+
+2026-09-02（第 2 次复现）：tauri-template 中 `cargo check` 输出 `Finished dev profile in 8.87s`（成功）但管线报 ExitCode 1，`npm run lint` 同样被误报；以输出特征串（`Finished` / `EXIT: 0`）判定后确认两者真实通过。原处置方案依然有效。
 
 ## [ERR-20260831-005] pnpm 隔离布局下，顶层 node_modules 查找会把"依赖齐全"误判为缺失
 
@@ -510,5 +512,30 @@ See Also: PB-20260901-002
 ### Resolution
 
 2026-09-01：对抗式审查发现后当场订正 progress.md / session-handoff.md（47→43，分项 24/14/3/2），并在数字旁标注「经 git ls-files 实测」来源，防止下一会话再次沿袭虚数。
+
+---
+
+## [ERR-20260902-001] cargo test 二进制启动即崩 STATUS_ENTRYPOINT_NOT_FOUND——用独立 bin 绕过导出 tauri-specta 绑定
+
+**Logged**: 2026-09-02 | **Status**: resolved | **Tags**: cargo, test-harness, tauri, specta, windows
+
+### Summary
+Windows 上 `cargo test export_bindings` 的测试二进制启动即崩（STATUS_ENTRYPOINT_NOT_FOUND 0xc0000139），与代码逻辑无关；同一 crate 用 `cargo run --bin` 编出的普通二进制运行正常。绕过：把绑定导出逻辑放进 `src/bin/export-bindings.rs`，用 `cargo run --bin export-bindings` 替代 `cargo test -- --ignored`。
+
+### Details
+- 场景：tauri-template 用 tauri-specta 导出 TS 绑定，官方惯例是 ignored test（`#[cfg(test)] #[test] #[ignore] fn export_bindings()`）；
+- 现象：`cargo test export_bindings -- --ignored` 编译通过，运行瞬间崩，Windows 事件码 0xc0000139（入口点未找到）；
+- 排除法：`PATH` 清成最小集无效；用 rustc 直接编最小 exe 正常运行 → 环境能加载新编译 PE，问题锁定在 test harness 二进制的运行时依赖（harness 链接的某个 DLL 缺导出/版本不匹配）；
+- 相邻坑：换 bin 通道后导出又报 `BigIntForbidden(i64)`——specta 默认拒绝 64 位整数字段（createdAt/lastActiveAt 等 i64），需显式 `specta_typescript::Typescript::default().bigint(BigIntExportBehavior::Number)`（API 以本地 registry 源码为准，0.0.9 版本确认存在）。
+
+### Suggested Action
+1. 遇 test 二进制启动即崩（0xc0000139），先用最小 rustc exe 验证环境，再切 `src/bin/` 独立 bin 绕过 harness，不要死磕 test 环境；
+2. tauri-specta 导出含 i64 的类型时，直接配上 `.bigint(BigIntExportBehavior::Number)`，不要等报错；
+3. 该 bin 依赖 `lib.rs` 中目标模块 `pub` 可见（如 `pub mod bindings`），这是与 test 方案的第二个差异点。
+
+See Also: ERR-20260831-004
+
+### Resolution
+2026-09-02：`cargo run --bin export-bindings` 导出 `src/lib/bindings.ts` 成功（21 个新命令 + 13 个类型），配 `.bigint(...)` 后无 BigIntForbidden；随后 `cargo check`（8.87s）、`npm run lint`（0 错）、`npx tsc --noEmit`（0 错）三重门禁全绿。
 
 ---
