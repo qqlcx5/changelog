@@ -85,6 +85,28 @@ export const DINGTALK_CLIENT_SECRET = process.env.DINGTALK_CLIENT_SECRET || env.
 - `contact/users/me` 的 path 参数传字面量 `me` 即当前授权人，省一次 unionId 查询。
 - token / ticket 都缓存 7200s，本地缓存提前 60s 过期，避免临界失效。
 
+### 3.1 免登授权码：两个版本，别用错（最容易踩的坑）
+
+`dingtalk-jsapi` 里有三个长得几乎一样的免登 API，**映射到的 JSAPI 版本不同，配的后端接口也不同**：
+
+| union 调用 | 实际 JSAPI | 参数 | 返回 | 配哪个后端接口 | 客户端要求 |
+|---|---|---|---|---|---|
+| `dd.getAuthCode` | `runtime.permission.requestAuthCode`（V1） | `{ corpId }` | `{ authCode }` | 老模型 `rpc/oauth2/dingtalk_app_user.json` 等 | 6.0.0+ |
+| `dd.getAuthCodeV2` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | **新模型 `v1.0/oauth2/userAccessToken`** | 7.0.45+ |
+| `dd.requestAuthCode` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | 同上（与 getAuthCodeV2 完全等价） | 同上 |
+
+证据（`node_modules/dingtalk-jsapi/api/union/*.js`，一行代码）：
+
+```
+apiName="getAuthCode"     ,actualCallApiName="runtime.permission.requestAuthCode"
+apiName="getAuthCodeV2"   ,actualCallApiName="runtime.permission.requestAuthCodeV2"
+apiName="requestAuthCode" ,actualCallApiName="runtime.permission.requestAuthCodeV2"
+```
+
+判定方法：看凭证形态。**给了 clientId/clientSecret（新模型）就必须用 V2**；V1 拿到的 authCode 喂给 `v1.0/oauth2/userAccessToken` 会报「不合法的临时授权码」，很容易误判成后端或签名的问题。
+
+免登授权码**免鉴权**，`api/runtime/permission/requestAuthCode.d.ts` 里写着「调用此api不需要进行鉴权（即不需要进行dd.config）」。放进 `jsApiList` 不报错也无副作用，主要是让 `dd.checkJsApi` 能查到可用状态。
+
 ## 4. 目录结构（可直接照搬）
 
 ```
@@ -167,5 +189,6 @@ curl "http://localhost:5193/api/dingtalk/jsapi-signature?url=http%3A%2F%2Flocalh
 5. **后端空串覆盖**：`signature.agentId || DINGTALK_AGENT_ID` 用 truthy 兜底，否则后端漏配时传给钉钉的是空字符串。
 6. **Vant `van-tag` 没有 `size="mini"`**：Tag 只有 `large | medium`，写 `mini` 会类型报错；`van-button` 才有 mini。
 7. **后台 JSAPI 权限**：通讯录（contact.choose）、定位（geolocation.get）需单独申请权限，免登默认开通。报 errorCode 9 是签名问题，不是权限问题。
+8. **免登「不合法的临时授权码」先查版本**：新模型（clientId）用了 `dd.getAuthCode`（V1）就会报这个错，看起来像后端问题，实则是 V1/V2 错配。对照第 3.1 节的表。
 
 See Also: PB-20260824-001
