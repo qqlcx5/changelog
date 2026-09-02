@@ -6,13 +6,35 @@ tags: [uniapp, dingtalk, jsapi, auth]
 status: verified
 source: conversation:2026-08-24
 created: 2026-08-24
-updated: 2026-08-26
+updated: 2026-09-02
 ---
 
 # uniapp 接入钉钉 H5 微应用（企业内部应用 / 老模型）
 
 > 适用：uniapp / unibest 脚手架，做钉钉工作台内的 H5 微应用，需要 JSAPI 鉴权（扫一扫、选图片、选人、定位）+ 免登。
 > 本文为可直接复用的落地指南，凭证信息用占位/示例，真实密钥只在服务端。
+
+## 0. 技术选型：uniapp 还是纯 H5 脚手架
+
+> 结论先行：**只做钉钉 H5 微应用 → 纯 H5（Vue3 + Vite + Vant）；还要发小程序 / App → uniapp。**
+
+| 维度 | 纯 H5 脚手架 | uniapp（编译到 H5） |
+|---|---|---|
+| 钉钉官方适配 | 官方 CLI `ding init`（DingTalk Design CLI）直接支持 H5 微应用，本地模拟 + 真机远程调试开箱可用 | 官方适配的是**钉钉小程序**（mp-dingtalk）；H5 微应用无专项适配，只是当普通 SPA 编译 |
+| JSAPI / dd.config | 自己引 `dingtalk-jsapi`、自己签 | **同样**自己引、自己签，uniapp 不代劳 |
+| 额外坑 | 少 | `dd is not defined`（引入时机）、hash 路由 + `publicPath/router.base` 白屏、H5 产物体积偏大、条件编译分散逻辑 |
+| 跨端收益 | 无 | 需同时发微信/支付宝小程序或 App 才兑现 |
+| 移动端 + PC 双端 | 同一套 SPA 响应式即可（钉钉后台本就是两个首页地址） | 同，但多一层平台抽象 |
+
+判定规则（二选一，别纠结）：
+- 只进钉钉工作台（移动 + PC）→ 纯 H5。`Vite + Vue3 + Vant`，移动端与 PC 用响应式布局，不开两个仓库。
+- 同一套代码还要发微信小程序 / 支付宝 / App / 其他小程序 → uniapp，跨端收益 > 抽象税。
+- 已有成熟 uniapp 资产要复用 → uniapp（复用 > 理论最优）。
+
+纯 H5 起步（跑通鉴权约 1 天）：
+1. `npm create vite@latest ding-h5 -- --template vue-ts` + `npm i vant dingtalk-jsapi`
+2. `npm i -g dingtalk-design-cli && ding init`（本地 dev + `open-dev.dingtalk.com` 的 H5 远程调试）
+3. 鉴权 / 免登按本文第 2、3 节流程走（签名必须服务端算，签名 url 取 `location.href.split('#')[0]`）
 
 ## 1. 需要的凭证
 
