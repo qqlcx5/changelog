@@ -1,7 +1,7 @@
 ---
 id: PB-20260902-003
 type: playbook
-title: Vite + Vue3 + Vant 接入钉钉 H5 微应用（v1.0 新模型 + mock 层服务端签名）
+title: Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型：签名 v1.0 + 免登 topapi/v2 + mock 层服务端签名）
 tags: [dingtalk, vite, vue3, jsapi, mock]
 status: verified
 source: conversation:2026-09-02
@@ -9,11 +9,12 @@ created: 2026-09-02
 updated: 2026-09-02
 ---
 
-# Vite + Vue3 + Vant 接入钉钉 H5 微应用（v1.0 新模型）
+# Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型）
 
 > 适用：纯 H5 脚手架（Vite + Vue3 + TS + Vant）做钉钉工作台内的 H5 微应用，需要 JSAPI 鉴权 + 免登。
-> 与 [PB-20260824-001](dingtalk-h5-microapp.md)（uniapp + 老模型）互补：本文是**新应用模型（clientId/clientSecret + `api.dingtalk.com/v1.0`）**，且签名服务直接落在 `vite-plugin-mock-dev-server` 的 mock 层，前端无需另起 Node 后端进程即可联调。
-> 实战已验证：`accessToken → jsapiTickets → SHA1 签名` 链路返回真实签名；免登接口到达钉钉并返回「不合法的临时授权码」（说明链路通，仅 code 是假的）。
+> 与 [PB-20260824-001](dingtalk-h5-microapp.md)（uniapp + 老模型）互补：本文签名服务直接落在 `vite-plugin-mock-dev-server` 的 mock 层，前端无需另起 Node 后端进程即可联调。
+> **关键修正（2026-09-02）**：本文采用 **hybrid 模型**——签名走统一 OpenAPI（`api.dingtalk.com/v1.0`，应用维度 ticket 无需 corpId），免登走老模型（`oapi.dingtalk.com/topapi/v2/user/getuserinfo` + `topapi/v2/user/get`）。这是企业内部应用（有 agentId）在钉钉里能真实跑通免登的链路，已对照 reference/ding-uniapp 验证。
+> 实战已验证：`accessToken → jsapiTickets → SHA1 签名` 链路返回真实签名（`mocked:false`）；免登接口到达钉钉并返回「不合法的临时授权码」（说明链路通，仅 code 是假的，浏览器里无法拿到真 authCode）。
 
 ## 1. 依赖
 
@@ -56,7 +57,7 @@ export const DINGTALK_CLIENT_SECRET = process.env.DINGTALK_CLIENT_SECRET || env.
 
 `import process from 'node:process'` 是必须的——antfu eslint 的 `node/prefer-global/process` 规则会报「Unexpected use of the global variable 'process'」。
 
-## 3. v1.0 新模型链路（4 个端点，全部实测）
+## 3. hybrid 链路（签名 v1.0 + 免登 topapi/v2，已实测）
 
 ```
 1) POST https://api.dingtalk.com/v1.0/oauth2/accessToken
@@ -65,24 +66,24 @@ export const DINGTALK_CLIENT_SECRET = process.env.DINGTALK_CLIENT_SECRET || env.
 
 2) POST https://api.dingtalk.com/v1.0/oauth2/jsapiTickets
    header: x-acs-dingtalk-access-token: <accessToken>
-   → { jsapiTicket, expireIn: 7200 }                 ← 缓存
+   → { jsapiTicket, expireIn: 7200 }                 ← 缓存，应用维度无需 corpId
 
 3) 本地签名（前端给 url，后端 sha1）
    raw = `jsapi_ticket=${ticket}&noncestr=${nonceStr}&timestamp=${timeStamp}&url=${url}`
    signature = sha1(raw)
 
-4) 免登：
-   POST https://api.dingtalk.com/v1.0/oauth2/userAccessToken
-   body: { clientId, clientSecret, code: authCode, grantType: 'authorization_code' }
-   → { accessToken, corpId, expireIn }
-   GET https://api.dingtalk.com/v1.0/contact/users/me
-   header: x-acs-dingtalk-access-token: <用户 accessToken>
-   → { nick, avatarUrl, mobile, openId, unionId, email, stateCode }
+4) 免登（老模型 topapi/v2，企业内部应用 + agentId 标准链路）：
+   POST https://oapi.dingtalk.com/topapi/v2/user/getuserinfo?access_token=<应用级accessToken>
+   body: { code: authCode }                           ← V1 的临时授权码
+   → { errcode:0, result: { userid } }
+   POST https://oapi.dingtalk.com/topapi/v2/user/get?access_token=<应用级accessToken>
+   body: { userid }
+   → { errcode:0, result: { name, mobile, avatar, dept_id_list } }
 ```
 
 要点：
-- 老模型的 `gettoken` / `get_jsapi_ticket` / `topapi/v2/user/getuserinfo` 与新模型**不通用**，凭证形态不同（老模型 AppKey/AppSecret + agentId；新模型 clientId/clientSecret），别混用。
-- `contact/users/me` 的 path 参数传字面量 `me` 即当前授权人，省一次 unionId 查询。
+- **签名与免登用两套域名**：签名用统一 OpenAPI（`api.dingtalk.com/v1.0`，应用维度 ticket 不需要钉钉注入 corpId）；免登用老 `oapi.dingtalk.com/topapi/v2`，拿的是「应用级 accessToken（第1步那个）」，不是用户 token。
+- 老 `topapi/v2/user/getuserinfo` 把 V1 临时授权码换成 `userid`，再用 `topapi/v2/user/get` 换详情。这两个接口都用**同一个应用级 accessToken**（免登免用户 token）。
 - token / ticket 都缓存 7200s，本地缓存提前 60s 过期，避免临界失效。
 
 ### 3.1 免登授权码：两个版本，别用错（最容易踩的坑）
@@ -91,8 +92,8 @@ export const DINGTALK_CLIENT_SECRET = process.env.DINGTALK_CLIENT_SECRET || env.
 
 | union 调用 | 实际 JSAPI | 参数 | 返回 | 配哪个后端接口 | 客户端要求 |
 |---|---|---|---|---|---|
-| `dd.getAuthCode` | `runtime.permission.requestAuthCode`（V1） | `{ corpId }` | `{ authCode }` | 老模型 `rpc/oauth2/dingtalk_app_user.json` 等 | 6.0.0+ |
-| `dd.getAuthCodeV2` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | **新模型 `v1.0/oauth2/userAccessToken`** | 7.0.45+ |
+| `dd.getAuthCode` | `runtime.permission.requestAuthCode`（V1） | `{ corpId }` | `{ authCode }` | **老模型 `topapi/v2/user/getuserinfo`** | 6.0.0+ |
+| `dd.getAuthCodeV2` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | 新模型 `v1.0/oauth2/userAccessToken` | 7.0.45+ |
 | `dd.requestAuthCode` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | 同上（与 getAuthCodeV2 完全等价） | 同上 |
 
 证据（`node_modules/dingtalk-jsapi/api/union/*.js`，一行代码）：
@@ -103,9 +104,23 @@ apiName="getAuthCodeV2"   ,actualCallApiName="runtime.permission.requestAuthCode
 apiName="requestAuthCode" ,actualCallApiName="runtime.permission.requestAuthCodeV2"
 ```
 
-判定方法：看凭证形态。**给了 clientId/clientSecret（新模型）就必须用 V2**；V1 拿到的 authCode 喂给 `v1.0/oauth2/userAccessToken` 会报「不合法的临时授权码」，很容易误判成后端或签名的问题。
+判定方法：**企业内部应用（有 agentId）走 V1 免登**——`dd.getAuthCode({ corpId })` 拿 `{ authCode }`，后端调 `topapi/v2/user/getuserinfo`。把 V1 的 authCode 喂给 `v1.0/oauth2/userAccessToken` 会报「不合法的临时授权码」，极易误判成后端或签名问题。新模型（clientId/clientSecret + 无 agentId 的第三方应用）才用 V2 + `userAccessToken`。
 
 免登授权码**免鉴权**，`api/runtime/permission/requestAuthCode.d.ts` 里写着「调用此api不需要进行鉴权（即不需要进行dd.config）」。放进 `jsApiList` 不报错也无副作用，主要是让 `dd.checkJsApi` 能查到可用状态。
+
+### 3.2 corpId 从 URL 注入取（避免 errorCode 9）
+
+钉钉打开 H5 微应用时会在 URL 注入 `?corpid=<真实企业corpId>`。免登和 `dd.config` 的 corpId **优先用这个注入值**，不要只用静态 env 里配的 corpId，否则在移动端会报 `errorCode 9`（签名企业不匹配）。
+
+```ts
+export function getCorpIdFromUrl(): string {
+  const m = location.search.match(/[?&]corpid=([^&]+)/i)
+  return m ? decodeURIComponent(m[1]) : ''
+}
+export function resolveCorpId(): string {
+  return getCorpIdFromUrl() || DINGTALK_CORP_ID
+}
+```
 
 ## 4. 目录结构（可直接照搬）
 
@@ -133,7 +148,7 @@ export function authDingTalk(): Promise<{ authed: boolean, signature: JsapiSigna
     const signature = (await fetchJsapiSignature(url)).data
     dd.config({
       agentId: signature.agentId || DINGTALK_AGENT_ID,   // 用 truthy 兜底，防后端返回空串覆盖
-      corpId: signature.corpId || DINGTALK_CORP_ID,
+      corpId: signature.corpId || resolveCorpId(),      // 优先 URL 注入的真实 corpId，避免 errorCode 9
       timeStamp: signature.timeStamp,
       nonceStr: signature.nonceStr,
       signature: signature.signature,
@@ -189,6 +204,6 @@ curl "http://localhost:5193/api/dingtalk/jsapi-signature?url=http%3A%2F%2Flocalh
 5. **后端空串覆盖**：`signature.agentId || DINGTALK_AGENT_ID` 用 truthy 兜底，否则后端漏配时传给钉钉的是空字符串。
 6. **Vant `van-tag` 没有 `size="mini"`**：Tag 只有 `large | medium`，写 `mini` 会类型报错；`van-button` 才有 mini。
 7. **后台 JSAPI 权限**：通讯录（contact.choose）、定位（geolocation.get）需单独申请权限，免登默认开通。报 errorCode 9 是签名问题，不是权限问题。
-8. **免登「不合法的临时授权码」先查版本**：新模型（clientId）用了 `dd.getAuthCode`（V1）就会报这个错，看起来像后端问题，实则是 V1/V2 错配。对照第 3.1 节的表。
+8. **免登「不合法的临时授权码」先查版本**：企业内部应用（有 agentId）必须 `dd.getAuthCode({ corpId })`（V1）拿 `{ authCode }`，后端走 `topapi/v2/user/getuserinfo`；一旦误用 `dd.getAuthCodeV2`（V2）拿 `{ code }` 去喂老模型接口就报这个错。看起来像后端问题，实则是 V1/V2 错配。对照第 3.1 节的表。
 
 See Also: PB-20260824-001
