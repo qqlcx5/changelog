@@ -129,13 +129,11 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 
 **诊断提醒**：用户报「字典回显有问题」先澄清具体现象（列表码值显原编码 vs 搜索区下拉变文本框 vs 下拉空选项 vs 切语言丢失）——列表翻译与搜索区选项是两条独立链路，混着排查浪费时间。
 
-**例外分支：全局通用枚举（Y/N 等）前端直接写通用字典，契约列元数据不动（2026-09-03 二次增补，同日用户终审定版）**
+**例外分支：Y/N 通用枚举复用现成系统字典 commonYN，前端直接写（2026-09-03 二次增补，同日用户两轮纠错终审定版）**
 
-> 来源：同页「下单状态 isorder」值域 Y/N——用户明确「枚举值 Y/N 全局都一样，取通用字典直接写就行了」。
+> 来源：同页「下单状态 isorder」值域 Y/N——用户先明确「取通用字典直接写就行了」，又纠错「yes_no 匹配不上」，最后找到现成字典「commonYN_Y」。
 
-码值列配置前先分清字典归属（两套字典不可互换：`sys_dict_value` vs `bd_mdp_dict`），别按「分类码 = 字段名大写」惯例推断。全局通用枚举的终版姿势：
-
-1. **SQL 只改查询配置**：`compare_type='IN'`（多选语义）；列元数据保持 `TEXT`/`ref_code=NULL`——**不必配 `DICT`+ref_code**：本地 `search.options` 本就必配（回退模式兜底），契约生效时 `queryToField` 的 IN 继承用本地 options 覆盖契约 options，配了 DICT+ref_code 的契约选项链路（`resolveRefOptions`）会被覆盖、等于白配；
-2. **前端直接写通用字典**：formatter 用 `dictUtils.getDictLabel("yes_no", value, value)`（第三参回退原值）、search options 用 `dictUtils.getDictList("yes_no")`——`getDictList` 纯读登录缓存（`/sys/user/getMenus` 注入），**无需页面预加载**，也不要加进 MDP 预加载清单；
-3. **同构原则**：isorder 与 MDP 字典码值列走完全同一条「TEXT + IN + 本地 options 继承」链路，唯一差异是选项源（`dictUtils` vs `mdpDictUtils`）——单一事实源仍是页面列定义；
-4. **反例教训**：自造 `ISORDER` 分类码配 MDP 字典——通用枚举 MDP 侧通常不下发，`bd_mdp_dict` 无数据时下拉为空、翻译回退原值；配置前先与用户确认字典归属或查库验证。
+1. **先搜现成字典，再谈新建（两轮返工的核心教训）**：配通用枚举前先 grep 前端 `getDictList\("` 找同值域现成类型——项目里 Y/N 值域的现成字典是 **`commonYN`**（i18nKey 形如 `commonYN_Y/N`，供应商主数据详情页 isIntegratedFactory/isImport/isOdm 等 Y/N 字段在用），isorder 直接复用；**不要只查 db DML 与基础库 dump**——运行库的增量字典不在脚本里（commonYN 在 jeeplus-boot-saas-v3.sql 与 db/ 下都搜不到），自建 `md_yes_no` 后发现 commonYN 已删；
+2. **通用字典值域必须核验**：全局 `yes_no` 的 value 是 **1/0**（`sys_dict_value` id=5 是→1、id=6 否→0），**不是 Y/N**——用它配 Y/N 字段，formatter 匹配不上回退显原码，下拉选中提交 `'1'` 去 IN 查 `'Y'` **静默空结果**（比报错更难发现）；
+3. **SQL 只改查询配置**：`compare_type='IN'`；列元数据保持 `TEXT`/`ref_code=NULL`——本地 `search.options` 本就必配（回退兜底），契约生效时 IN 继承覆盖契约 options，配 DICT+ref_code 等于白配；
+4. **前端直接写**：formatter `dictUtils.getDictLabel("commonYN", value, value)`（第三参回退原值）、options `dictUtils.getDictList("commonYN")`——纯读登录缓存，无需预加载；与 MDP 字典码值列同一条「TEXT + IN + 本地 options 继承」链路，仅选项源不同。
