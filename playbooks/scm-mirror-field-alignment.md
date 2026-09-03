@@ -129,13 +129,13 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 
 **诊断提醒**：用户报「字典回显有问题」先澄清具体现象（列表码值显原编码 vs 搜索区下拉变文本框 vs 下拉空选项 vs 切语言丢失）——列表翻译与搜索区选项是两条独立链路，混着排查浪费时间。
 
-**例外分支：全局通用枚举（Y/N 等）走系统通用字典 + 契约 DICT 原生链路，不走 MDP 字典（2026-09-03 二次增补）**
+**例外分支：全局通用枚举（Y/N 等）前端直接写通用字典，契约列元数据不动（2026-09-03 二次增补，同日用户终审定版）**
 
-> 来源：同页「下单状态 isorder」值域 Y/N——用户明确「枚举值 Y/N 全局都一样，取通用字典就行」。
+> 来源：同页「下单状态 isorder」值域 Y/N——用户明确「枚举值 Y/N 全局都一样，取通用字典直接写就行了」。
 
-码值列配置前先分清字典归属（两套字典不可互换：`sys_dict_value` vs `bd_mdp_dict`），别按「分类码 = 字段名大写」惯例推断：
+码值列配置前先分清字典归属（两套字典不可互换：`sys_dict_value` vs `bd_mdp_dict`），别按「分类码 = 字段名大写」惯例推断。全局通用枚举的终版姿势：
 
-1. **全局通用枚举**（`yes_no` 等）：列元数据 `data_type='DICT'` + `ref_code='yes_no'`（契约 DICT 选项链路唯一支持的体系，与供应商主数据/报废鉴定明细页字典列同款）+ 查询配置 `IN`；前端 formatter 用 `dictUtils.getDictLabel("yes_no", value, value)`（第三参回退原值）、search options 用 `dictUtils.getDictList("yes_no")`——`getDictList` 纯读登录缓存（`/sys/user/getMenus` 注入），**无需页面预加载**，也不要加进 MDP 预加载清单；
-2. **MDP 字典码值列**：按本节主体方案（`data_type` 保持 TEXT + IN + 前端 options 继承）；
-3. **双保险无害**：契约模式走 pageSchema DICT 链路（`resolveRefOptions`），回退模式走本地 `search.options`，两处同源（yes_no）时 `queryToField` 的 IN 继承覆盖不改变结果；
+1. **SQL 只改查询配置**：`compare_type='IN'`（多选语义）；列元数据保持 `TEXT`/`ref_code=NULL`——**不必配 `DICT`+ref_code**：本地 `search.options` 本就必配（回退模式兜底），契约生效时 `queryToField` 的 IN 继承用本地 options 覆盖契约 options，配了 DICT+ref_code 的契约选项链路（`resolveRefOptions`）会被覆盖、等于白配；
+2. **前端直接写通用字典**：formatter 用 `dictUtils.getDictLabel("yes_no", value, value)`（第三参回退原值）、search options 用 `dictUtils.getDictList("yes_no")`——`getDictList` 纯读登录缓存（`/sys/user/getMenus` 注入），**无需页面预加载**，也不要加进 MDP 预加载清单；
+3. **同构原则**：isorder 与 MDP 字典码值列走完全同一条「TEXT + IN + 本地 options 继承」链路，唯一差异是选项源（`dictUtils` vs `mdpDictUtils`）——单一事实源仍是页面列定义；
 4. **反例教训**：自造 `ISORDER` 分类码配 MDP 字典——通用枚举 MDP 侧通常不下发，`bd_mdp_dict` 无数据时下拉为空、翻译回退原值；配置前先与用户确认字典归属或查库验证。
