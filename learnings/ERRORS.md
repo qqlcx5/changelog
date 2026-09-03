@@ -585,3 +585,26 @@ Windows 开发机未单独装 Maven，`mvn` 不在 PATH（CommandNotFoundExcepti
 2026-09-03：定位 wrapper 缓存 mvn.cmd（3.9.9），`& <path> -s settings.xml -f jp-console/pom.xml -DskipTests compile -q` 编译通过（EXIT=0）。
 
 ---
+
+## [ERR-20260903-003] dingtalk-jsapi union getAuthCode 声明返回 { authCode }，实际透传底层 { code }，解构得 undefined 导致免登空 code
+
+**Logged**: 2026-09-03 | **Status**: resolved | **Tags**: dingtalk, jsapi, types, axios
+
+### Summary
+dingtalk-jsapi 3.2.9 的 union 层 `dd.getAuthCode` 的 .d.ts 声明返回 `{ authCode }`，但 union 层源码只是 `ddSdk.invokeAPI('runtime.permission.requestAuthCode', params)` 纯透传，底层 platform 类型明确返回 `{ code }`；按声明解构得 undefined，免登请求丢失 code 参数，后端报「authCode 不能为空」。
+
+### Details
+- 现象：钉钉容器内免登 toast「免登失败：authCode 不能为空」，请求实际发出但无 code 参数；
+- 定位：union/getAuthCode.js 仅 `invokeAPI(actualCallApiName, d)` 无响应改名；union/getAuthCode.d.ts 声明 `IUnionGetAuthCodeResult { authCode }` 与 runtime/permission/requestAuthCode.d.ts 的 `IRuntimePermissionRequestAuthCodeResult { code }` 矛盾，后者才是真实返回；
+- 放大机制：axios params 中值为 undefined 的键会被静默丢弃（不报错），后端报「参数为空」时要先查前端是否传了 undefined；
+- 误导源：playbook PB-20260902-003 第 3.1 节表格当时按 .d.ts 记为「返回 { authCode }」，本次已更正。
+
+### Suggested Action
+1. 用 dingtalk-jsapi union API 前与 platform 层 .d.ts 交叉验证响应结构，union 类型声明可能失真；
+2. 对 SDK 返回做兼容提取 `res?.authCode ?? res?.code ?? ''`，空值显式 throw 并携带 corpId 与原始返回，别让空值流到请求层；
+3. 呼应 ERR-20260827-001：类型/文档声明与运行时证据冲突时，以源码（js 实现链）为准。
+
+### Resolution
+2026-09-03：ding-h5 utils/dingtalk.ts getAuthCode 改为兼容提取两键 + 空值显式报错；另查明 dev 侧 vite-plugin-mock-dev-server 曾抢答 /api/auth/dingtalk/login（假 token 干扰真机联调），已移除该插件与 mock 目录，dev 经 vite proxy 直连真实后端；pnpm lint 通过。
+
+---

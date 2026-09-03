@@ -92,7 +92,7 @@ export const DINGTALK_CLIENT_SECRET = process.env.DINGTALK_CLIENT_SECRET || env.
 
 | union 调用 | 实际 JSAPI | 参数 | 返回 | 配哪个后端接口 | 客户端要求 |
 |---|---|---|---|---|---|
-| `dd.getAuthCode` | `runtime.permission.requestAuthCode`（V1） | `{ corpId }` | `{ authCode }` | **老模型 `topapi/v2/user/getuserinfo`** | 6.0.0+ |
+| `dd.getAuthCode` | `runtime.permission.requestAuthCode`（V1） | `{ corpId }` | `{ code }`（union .d.ts 谎报 `{ authCode }`，union 层仅透传底层 requestAuthCode，见 ERR-20260903-003） | **老模型 `topapi/v2/user/getuserinfo`** | 6.0.0+ |
 | `dd.getAuthCodeV2` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | 新模型 `v1.0/oauth2/userAccessToken` | 7.0.45+ |
 | `dd.requestAuthCode` | `runtime.permission.requestAuthCodeV2` | `{ corpId, clientId }` | `{ code }` | 同上（与 getAuthCodeV2 完全等价） | 同上 |
 
@@ -209,6 +209,8 @@ curl "http://localhost:5193/api/dingtalk/jsapi-signature?url=http%3A%2F%2Flocalh
 9. **免登失败被「整页跳转兜底」掩盖**：钉钉容器内免登失败应 toast + 登录页手动重试，禁止整页跳 SSO 登录页；真实失败根因（baseURL 缺上下文前缀 / 后端业务错误）会被跳转掩盖。见第 9 节。
 10. **HTTP 200 的业务错误不会让 axios reject**：后端常见 `Result` 包裹错误（HTTP 200 + `{code:500, msg}`），归一化函数必须把 `msg` 一并带出用于失败提示，否则只能看到「后端未返回 token」这种无信息量报错。
 
+11. **union `dd.getAuthCode` 返回键名与 .d.ts 不符**：union 层仅透传底层 requestAuthCode（返回 `{ code }`），.d.ts 却声明 `{ authCode }`；按声明解构得 undefined，axios 丢参后端报「code 不能为空」。兼容提取 `res?.authCode ?? res?.code`，空值显式报错。
+
 ## 9. 请求式免登：钉钉容器内只发请求、永不整页跳转（2026-09-03 增补）
 
 免登链路接入业务后端（`GET <API>/auth/dingtalk/login?code=<authCode>` 换 JWT）后，常见错误实现是「免登失败就整页跳转到 SSO 登录页兜底」。钉钉容器内这是反模式：用户被带离微应用上下文，看到与钉钉无关的登录页，且失败根因被跳转掩盖、难以排查。正确姿势：
@@ -239,4 +241,4 @@ curl "http://localhost:5193/api/dingtalk/jsapi-signature?url=http%3A%2F%2Flocalh
 - 前后端同域部署时，生产 baseURL 直接用**含上下文的相对路径**（`/<上下文>/api`），请求即命中后端真实地址，同域无 CORS。
 - 排查口诀：dev 正常、部署后免登失败 → 先看生产 baseURL 是否漏了上下文前缀，再确认失败是否被兜底跳转掩盖。
 
-See Also: PB-20260824-001
+See Also: PB-20260824-001, ERR-20260903-003

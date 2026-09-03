@@ -43,7 +43,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 19 | 2026-09-03 |
+| errors | learnings/ERRORS.md | 20 | 2026-09-03 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 | learnings | learnings/LEARNINGS.md | 5 | 2026-09-03 |
 <!-- END:learnings -->
