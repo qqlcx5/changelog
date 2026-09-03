@@ -539,3 +539,49 @@ See Also: ERR-20260831-004
 2026-09-02：`cargo run --bin export-bindings` 导出 `src/lib/bindings.ts` 成功（21 个新命令 + 13 个类型），配 `.bigint(...)` 后无 BigIntForbidden；随后 `cargo check`（8.87s）、`npm run lint`（0 错）、`npx tsc --noEmit`（0 错）三重门禁全绿。
 
 ---
+
+## [ERR-20260903-001] Grep 类搜索工具单次输出截断 15 条，大批量清单提取静默不完整
+
+**Logged**: 2026-09-03 | **Status**: resolved | **Tags**: grep, search, truncation, evidence
+
+### Summary
+Grep 类封装工具单次调用输出截断到 15 条匹配：86 列清单提取到一半、17 条 ID 只返回 15 条，两次据「搜完了」的表象下结论险些漏项；返回里既无 truncated 标记也无匹配总数，截断不可感知。
+
+### Details
+- 场景一：从 762 行 vue 提取全部列 field 顺序核对 86 列清单，只返回前 15 个 field，中间缺段导致残留重复列块未被发现；
+- 场景二：确认 ERRORS.md 当日序号时 `^## \[ERR-` 恰好 15 条，与 INDEX 统计 17 条矛盾，改精确 pattern 二次查询才发现尾部还有 2 条；
+- 机制：工具层对返回结果做 head 截断（非 rg 本身），「结果看起来完整」不可信；预期命中少时看不出异常，命中一多就静默丢尾部。
+
+### Suggested Action
+1. 预期匹配可能超过十几个时不拿 Grep 枚举全量清单：改 Read 全文人工提取，或 PowerShell `Select-String | ForEach-Object { $_.Line.Trim() }` 拿全量；
+2. 用「总数旁证」交叉验证：索引统计、`Measure-Object -Line` 等与 grep 命中数对不上即说明截断；
+3. 确定性结论（序号、列清单、差集比对）一律以全量提取为准，单次 grep 结果只当线索。
+
+See Also: ERR-20260827-001
+
+### Resolution
+2026-09-03：商品主数据 86 列改用 Read 全文 + PowerShell Select-String 提取核对，最终契约 visible_columns 与前端列序 Compare-Object 比对 MATCH（86=86）；ERRORS.md 序号确认改用精确 pattern `ERR-2026090[0-9]-\d+` 二次查询补齐尾部 2 条。
+
+---
+
+## [ERR-20260903-002] mvn 不在 PATH：Maven 只存在于 .m2\wrapper\dists 发行版缓存
+
+**Logged**: 2026-09-03 | **Status**: resolved | **Tags**: maven, path, windows, wrapper
+
+### Summary
+Windows 开发机未单独装 Maven，`mvn` 不在 PATH（CommandNotFoundException），但 Maven 发行版其实已被 wrapper 下载缓存到用户目录，用完整路径调用即可编译，无需安装。
+
+### Details
+- 现象：`mvn -s settings.xml -f pom.xml compile` 报「无法将"mvn"项识别为 cmdlet…」；
+- 机制：Maven Wrapper 把发行版解压到 `%USERPROFILE%\.m2\wrapper\dists\apache-maven-<ver>\<hash>\bin\mvn.cmd`（hash 目录名不可猜，须探测）；
+- 探测：对候选根数组（.m2\wrapper\dists、JetBrains 安装目录等）循环 `Get-ChildItem $p -Recurse -Filter mvn.cmd -Depth 5`，命中后 PowerShell 用调用操作符 `& "完整路径" ...` 执行（带空格路径不能直接裸写）。
+
+### Suggested Action
+1. PATH 无 mvn 时先探测 `%USERPROFILE%\.m2\wrapper\dists`（凡 wrapper 项目构建过一次必有）与 IDEA 捆绑 Maven（`<IDEA>\plugins\maven\lib\maven3\bin\mvn.cmd`），再谈安装；
+2. 探测限定候选根 + `-Filter mvn.cmd -Depth 5`，避免全盘扫描；
+3. `-q` 静默模式下编译成功无输出，以 `$LASTEXITCODE` 判定成败；多模块 compile 可能耗时数分钟，放后台终端轮询。
+
+### Resolution
+2026-09-03：定位 wrapper 缓存 mvn.cmd（3.9.9），`& <path> -s settings.xml -f jp-console/pom.xml -DskipTests compile -q` 编译通过（EXIT=0）。
+
+---

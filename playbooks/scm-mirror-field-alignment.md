@@ -35,6 +35,8 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 
 前端双 key 分离写法：列 `field: "JAmsea"`（搜索提交 key 能被绑定）+ `formatter: ({ row }) => row.jamsea ?? ""`（从响应 key 取显示值）。注意：QueryWrapperGenerator 已改为按 Field 反射取值，此类字段查询不再抛 500，失败症状是**静默不生效**，更难发现；若前端历史上改过字段名 key，先 `git log` 确认后端是否同步改过。
 
+**mangle 判定细则与 jAmseaD 变体（2026-09-03 增补）**：双 key 分裂不止 jAmsea 一例，判定看 getter 大写形态——「连续大写开头」触发 mangle 整体小写化（getJAmsea→jamsea）；**词尾单大写不触发**（getZsyearD→zsyearD，fallback 按 /[A-Z]/g 自动得 zsyear_d）；实体字段本身全小写则响应 key 与物理列天然一致（subseries 无需处理）。jAmseaD 变体：getJAmseaD() mangle 后为 jamseaD（首段小写化、词尾 D 保留），它到物理列 j_amsea_d 的距离 fallback 补不上——契约模式下 field 全用 snake_case 物理列名时，行数据归一化需显式 `ROW_KEY_ALIAS: { jamsea: "j_amsea", jamseaD: "j_amsea_d" }`，回退查询参数绑定名仍是 JAmsea（Introspector 规则）另用 FALLBACK_PARAM_ALIAS 覆盖。
+
 ## 2. 列集合对齐原则：列 = 聚合 SQL 实际返回列
 
 列表接口若是**聚合统计**（自定义 Mapper XML 如 `selectAggregateList` 按 GROUP BY 维度分组），前端列集合必须等于聚合 SQL 的 SELECT 列，**不是实体全字段**：
@@ -109,6 +111,8 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 **双向核查**：权威口径表标记「删除」的字段，页面仍展示即违规——缺列要补，多列要删；物理列与契约列元数据可保留（历史数据不丢），仅从 visible_columns 与前端 columns 移除。
 
 **码值列的「文本」筛选口径**：枚举来自物理表注释或源系统时，新建系统字典（`sys_dict_type`/`sys_dict_value`，value=源码值），展示走字典翻译、筛选走码值 IN（契约 compare_type=IN + ref_code 指向字典），与既有字典列口径对齐；实体侧补 `@Query(type = QueryType.IN)` 保回退模式可用。注意：`ref_code` 指向字典的方式**仅适用于系统字典**，MDP 字典（`bd_mdp_dict`）走不通，见第 9 节。
+
+**程序化比对法（2026-09-03 增补）**：列规模上去后（86 列）肉眼核对 field 序列必漏——重排三列后忘插回新位置、前半替换后残留旧列块，两处均肉眼 diff 未见、靠脚本序列比对才暴露。核对动作固化：前端按行序提取 `field: "` 出现序列，契约 visible_columns 提取 JSON 数组同序序列，`Compare-Object` 断言逐位相等（数量相同 + 顺序一致）；重排/扩列类修改完成后必跑，肉眼 diff 只作初审。
 
 ## 9. 契约查询区的字典下拉退化与恢复：compare_type=IN + 前端 options 继承（2026-09-03 增补）
 
