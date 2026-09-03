@@ -34,6 +34,7 @@
 | PB-20260902-001 | 钉钉多端 H5 视口适配（vw + 最大宽度限制） | draft | dingtalk,viewport,vw,postcss,mobile | 2026-09-02 | playbooks/dingtalk-multi-platform-viewport.md |
 | PB-20260902-002 | 钉钉多端 H5 表格组件选型（Vant 无 Table 的替代路径） | draft | dingtalk,table,vue3,mobile | 2026-09-02 | playbooks/dingtalk-h5-table-component.md |
 | PB-20260902-003 | Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型：签名 v1.0 + 免登 topapi/v2 + mock 层服务端签名） | verified | dingtalk,vite,vue3,jsapi,mock | 2026-09-02 | playbooks/dingtalk-h5-vite-vue3-vant.md |
+| PB-20260903-001 | 免费大模型 API 平台选型清单（2026-09） | draft | free-api,llm,platform-selection,quota | 2026-09-03 | playbooks/free-llm-api-platforms.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
