@@ -6,7 +6,7 @@ tags: [qcm-v2, protable, field-mapping, jackson]
 status: verified
 source: conversation:2026-08-25
 created: 2026-08-25
-updated: 2026-09-01
+updated: 2026-09-03
 ---
 
 # QCM V2 镜像页字段口径对齐清单（SCM & MDP / jp-ui + 后端契约）
@@ -108,4 +108,23 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 
 **双向核查**：权威口径表标记「删除」的字段，页面仍展示即违规——缺列要补，多列要删；物理列与契约列元数据可保留（历史数据不丢），仅从 visible_columns 与前端 columns 移除。
 
-**码值列的「文本」筛选口径**：枚举来自物理表注释或源系统时，新建系统字典（`sys_dict_type`/`sys_dict_value`，value=源码值），展示走字典翻译、筛选走码值 IN（契约 compare_type=IN + ref_code 指向字典），与既有字典列口径对齐；实体侧补 `@Query(type = QueryType.IN)` 保回退模式可用。
+**码值列的「文本」筛选口径**：枚举来自物理表注释或源系统时，新建系统字典（`sys_dict_type`/`sys_dict_value`，value=源码值），展示走字典翻译、筛选走码值 IN（契约 compare_type=IN + ref_code 指向字典），与既有字典列口径对齐；实体侧补 `@Query(type = QueryType.IN)` 保回退模式可用。注意：`ref_code` 指向字典的方式**仅适用于系统字典**，MDP 字典（`bd_mdp_dict`）走不通，见第 9 节。
+
+## 9. 契约查询区的字典下拉退化与恢复：compare_type=IN + 前端 options 继承（2026-09-03 增补）
+
+> 来源：商品主数据（productMasterData）实战——契约生效后搜索区 MDP 字典多选下拉全部退化为 LIKE 文本输入框，用户须手输编码。
+
+**坑（两因素叠加，列表 formatter 翻译不受影响，只有搜索区退化）**：
+
+1. pageSchema 契约生效后查询区完全由 `sys_model_table_column_query` 驱动，页面列上的 `search` 配置只在契约未生效时回退；
+2. 契约 DICT 选项链路（前端 `resolveRefOptions` → `dictUtils.getDictList`）只认**系统字典** `sys_dict_value`，认不了 MDP 字典 `bd_mdp_dict`。若码值列查询项配 LIKE 文本（当时因选项链路走不通而妥协），契约一生效字典下拉就消失。
+
+**修复模式（契约管可查性/位置/比较符，页面列定义仍是选项数据源——单一事实源）**：
+
+1. SQL：码值列查询项 `compare_type` 配 **`IN`**（多值精确匹配，勿用 LIKE），`data_type` 保持 `TEXT`（DICT 链路走不通，不要硬配）；
+2. 前端：`queryToField`（`ProTable/utils.ts`）对 `compareType=IN` 的字段自动继承本地列 `search.options` 作为控件与选项来源（select + `mdpDictUtils.getMdpDictList(...)`）；本地未配 `options` 的字段（货号等自由文本 LIKE）不受影响；
+3. 后端零改动：`PageSchemaConditionValidator` 按 `compare_type` 白名单严格校验（不匹配抛「不支持的查询条件」），`QueryWrapperGenerator.applyQueryConditions` 原生支持 IN 多值（`QueryCondition.value` 是 `List<String>`，GET 经 qs indices 序列化）。
+
+**注意**：`ModelMetaQueryService` 查询配置有 **5 分钟本地缓存**，改库后需等缓存过期或重启后端才能在 pageSchema 下发中生效。
+
+**诊断提醒**：用户报「字典回显有问题」先澄清具体现象（列表码值显原编码 vs 搜索区下拉变文本框 vs 下拉空选项 vs 切语言丢失）——列表翻译与搜索区选项是两条独立链路，混着排查浪费时间。
