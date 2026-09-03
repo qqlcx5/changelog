@@ -6,7 +6,7 @@ tags: [dingtalk, vite, vue3, jsapi, mock]
 status: verified
 source: conversation:2026-09-02
 created: 2026-09-02
-updated: 2026-09-02
+updated: 2026-09-03
 ---
 
 # Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型）
@@ -205,5 +205,38 @@ curl "http://localhost:5193/api/dingtalk/jsapi-signature?url=http%3A%2F%2Flocalh
 6. **Vant `van-tag` 没有 `size="mini"`**：Tag 只有 `large | medium`，写 `mini` 会类型报错；`van-button` 才有 mini。
 7. **后台 JSAPI 权限**：通讯录（contact.choose）、定位（geolocation.get）需单独申请权限，免登默认开通。报 errorCode 9 是签名问题，不是权限问题。
 8. **免登「不合法的临时授权码」先查版本**：企业内部应用（有 agentId）必须 `dd.getAuthCode({ corpId })`（V1）拿 `{ authCode }`，后端走 `topapi/v2/user/getuserinfo`；一旦误用 `dd.getAuthCodeV2`（V2）拿 `{ code }` 去喂老模型接口就报这个错。看起来像后端问题，实则是 V1/V2 错配。对照第 3.1 节的表。
+
+9. **免登失败被「整页跳转兜底」掩盖**：钉钉容器内免登失败应 toast + 登录页手动重试，禁止整页跳 SSO 登录页；真实失败根因（baseURL 缺上下文前缀 / 后端业务错误）会被跳转掩盖。见第 9 节。
+10. **HTTP 200 的业务错误不会让 axios reject**：后端常见 `Result` 包裹错误（HTTP 200 + `{code:500, msg}`），归一化函数必须把 `msg` 一并带出用于失败提示，否则只能看到「后端未返回 token」这种无信息量报错。
+
+## 9. 请求式免登：钉钉容器内只发请求、永不整页跳转（2026-09-03 增补）
+
+免登链路接入业务后端（`GET <API>/auth/dingtalk/login?code=<authCode>` 换 JWT）后，常见错误实现是「免登失败就整页跳转到 SSO 登录页兜底」。钉钉容器内这是反模式：用户被带离微应用上下文，看到与钉钉无关的登录页，且失败根因被跳转掩盖、难以排查。正确姿势：
+
+**路由守卫（钉钉分支）**
+
+- 未登录 → `dd.getAuthCode({ corpId })` 取 code → GET 免登接口换 token，全程纯请求；
+- 失败只 toast 后端 msg 并跳转登录页（`{ name: 'Login', replace: true }`），**永不调用整页跳转**；
+- 模块级 `freeLoginAttempted` 旗标只挡「自动免登」的重复触发（每次页面加载至多一次）；重试入口放登录页手动按钮（调同一免登函数），不放守卫里自动循环。
+
+**401 拦截器**
+
+- 钉钉容器内：清 token + toast「请重新免登」，不跳页；下次路由导航时守卫会引导到登录页重试；
+- 非钉钉浏览器才走 SSO 整页跳转兜底。
+
+**免登失败要透出后端业务 msg**
+
+- 后端很多框架的错误返回是 HTTP 200 + 业务码/消息包裹（如 `{code:500, msg:'本地用户不存在'}`），axios 不会 reject。归一化函数必须把 `msg` 一并带出，失败 toast 才有可诊断信息。
+
+**循环依赖规避：容器判断抽独立底层模块**
+
+- axios 封装（request.ts）的 401 分支也需要判断钉钉容器；若从 `utils/dingtalk.ts` 导入会形成 `request → dingtalk → api/dingtalk → request` 循环。把一行 UA 判断抽到独立模块（如 `utils/dingtalk-env.ts`），由 dingtalk.ts 再导出，底层模块从独立模块导入。
+
+**生产 baseURL 的上下文前缀坑（最隐蔽）**
+
+- dev 下 vite proxy 通常配成 `/api → http://<后端域名>/<上下文>/api`（rewrite 剥掉 `/api`），一切正常；这个正确性**只属于 dev server**。
+- 生产构建的 `VITE_APP_API_BASE_URL` 若仍是 `/api`，部署后请求打到 `<部署域名>/api/...`，缺了后端上下文前缀（如 `/qcm/api`），免登 404（或被 SPA fallback 返回 HTML）→ 拿不到 token → 触发「失败兜底跳转」。
+- 前后端同域部署时，生产 baseURL 直接用**含上下文的相对路径**（`/<上下文>/api`），请求即命中后端真实地址，同域无 CORS。
+- 排查口诀：dev 正常、部署后免登失败 → 先看生产 baseURL 是否漏了上下文前缀，再确认失败是否被兜底跳转掩盖。
 
 See Also: PB-20260824-001

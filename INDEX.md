@@ -33,7 +33,7 @@
 | PB-20260901-002 | 架构质量门的存量冻结模式——用冻结快照替代基线棘轮，豁免历史包袱但拦截新增 | verified | quality-gate,legacy-freeze,static-analysis,entropy | 2026-09-01 | playbooks/legacy-freeze-gate.md |
 | PB-20260902-001 | 钉钉多端 H5 视口适配（vw + 最大宽度限制） | draft | dingtalk,viewport,vw,postcss,mobile | 2026-09-02 | playbooks/dingtalk-multi-platform-viewport.md |
 | PB-20260902-002 | 钉钉多端 H5 表格组件选型（Vant 无 Table 的替代路径） | draft | dingtalk,table,vue3,mobile | 2026-09-02 | playbooks/dingtalk-h5-table-component.md |
-| PB-20260902-003 | Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型：签名 v1.0 + 免登 topapi/v2 + mock 层服务端签名） | verified | dingtalk,vite,vue3,jsapi,mock | 2026-09-02 | playbooks/dingtalk-h5-vite-vue3-vant.md |
+| PB-20260902-003 | Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型：签名 v1.0 + 免登 topapi/v2 + mock 层服务端签名） | verified | dingtalk,vite,vue3,jsapi,mock | 2026-09-03 | playbooks/dingtalk-h5-vite-vue3-vant.md |
 | PB-20260903-001 | 免费大模型 API 平台选型清单（2026-09） | draft | free-api,llm,platform-selection,quota | 2026-09-03 | playbooks/free-llm-api-platforms.md |
 | PB-20260903-002 | Element Plus el-descriptions 标签列统一对齐三件套 | verified | element-plus,vue3,css,layout | 2026-09-03 | playbooks/element-plus-descriptions-label-alignment.md |
 <!-- END:playbooks -->
