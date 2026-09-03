@@ -608,3 +608,27 @@ dingtalk-jsapi 3.2.9 的 union 层 `dd.getAuthCode` 的 .d.ts 声明返回 `{ au
 2026-09-03：ding-h5 utils/dingtalk.ts getAuthCode 改为兼容提取两键 + 空值显式报错；另查明 dev 侧 vite-plugin-mock-dev-server 曾抢答 /api/auth/dingtalk/login（假 token 干扰真机联调），已移除该插件与 mock 目录，dev 经 vite proxy 直连真实后端；pnpm lint 通过。
 
 ---
+
+## [ERR-20260903-004] crate 新增辅助 bin 后 tauri dev 报 could not determine which binary to run
+
+**Logged**: 2026-09-03 | **Status**: resolved | **Tags**: cargo, tauri, default-run, multi-bin, windows
+
+### Summary
+为绕过 test harness 崩溃（ERR-20260902-001）在 src/bin/ 加了 export-bindings.rs 后，`tauri dev` 启动即报 `error: cargo run could not determine which binary to run`；Vite 正常 ready，卡在 Rust DevCommand。修复：Cargo.toml `[package]` 加 `default-run = "tauri-app"`。
+
+### Details
+- tauri dev 执行 `cargo run --no-default-features`，crate 有 ≥2 个 binary 且未声明 default-run 时 cargo 拒绝自动选择（报文列出 available binaries: export-bindings, tauri-app）；
+- 前半段（beforeDevCommand/vite）完全正常，容易误判为前端或包管理器问题——用户最初报「pnpm tauri dev 运行不起来」，实际与 pnpm/npm 无关；
+- tauri CLI 对该错误非阻塞：打印 error 后仍打 `Info Watching ... for changes` 随后进程退出，关键报错淹没在长输出里易漏看。
+
+### Suggested Action
+1. crate 内加任何 src/bin/*.rs 辅助二进制后，若主程序也是 bin（tauri 模板必然是），同步在 Cargo.toml `[package]` 加 `default-run = "<主 bin 名>"`；
+2. tauri dev 报障先看 `Running DevCommand (cargo run ...)` 之后的输出，别被 vite ready 误导；
+3. 辅助 bin 的调用始终用 `cargo run --bin <name>`，不依赖 default-run。
+
+See Also: ERR-20260902-001
+
+### Resolution
+2026-09-03：src-tauri/Cargo.toml 加 `default-run = "tauri-app"`（附注释说明原因）后 `npm run tauri dev` 成功：编译 1m24s，`Running target\debug\tauri-app.exe`，应用日志正常（Application starting up / quick pane 注册）。
+
+---

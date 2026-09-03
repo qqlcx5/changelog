@@ -1,4 +1,4 @@
-# INDEX — 总索引
+﻿# INDEX — 总索引
 
 > 知识库唯一入口。写入 / 更新条目后必须同步本文件对应表格；
 > `tools/sync-index.ps1` 校验一致性，`tools/sync-index.ps1 -Sync` 以 frontmatter 为源再生成表格。
@@ -43,7 +43,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 20 | 2026-09-03 |
+| errors | learnings/ERRORS.md | 21 | 2026-09-03 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 | learnings | learnings/LEARNINGS.md | 5 | 2026-09-03 |
 <!-- END:learnings -->
