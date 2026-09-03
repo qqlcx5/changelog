@@ -632,3 +632,25 @@ See Also: ERR-20260902-001
 2026-09-03：src-tauri/Cargo.toml 加 `default-run = "tauri-app"`（附注释说明原因）后 `npm run tauri dev` 成功：编译 1m24s，`Running target\debug\tauri-app.exe`，应用日志正常（Application starting up / quick pane 注册）。
 
 ---
+
+## [ERR-20260903-005] 并行依赖升级触发 eslint 规则回归——「新 error + 失效 disable」双信号指纹
+
+**Logged**: 2026-09-03 | **Status**: resolved | **Tags**: eslint, react-hooks, dependency-upgrade, lint
+
+### Summary
+lint 门禁全绿后突然变红，报错文件却无任何未提交改动——根因是并行会话的依赖升级提交（chore(deps)）让新版 eslint-plugin-react-hooks 的 `react-hooks/set-state-in-effect` 规则生效。
+
+### Details
+- 双信号互相矛盾：①既有代码新增 error（use-mobile.ts 在 effect 内同步 `setIsMobile(...)` 初始化 matchMedia 快照）；②上次按旧版规则加的 `eslint-disable-next-line react-hooks/set-state-in-effect`（ThemeProvider.tsx）反而报 "Unused eslint-disable directive"；
+- 「同一规则一处新报错、一处 disable 失效」是规则行为变化的指纹：说明规则实现变了，而不是代码被改动；
+- 定位链：git status（报错文件不在改动列表）→ git log 最新提交即依赖升级 → 版本升级导致规则重算。
+
+### Suggested Action
+1. lint 全绿后变红：先 `git status` 排除本地改动，再 `git log` 找依赖升级提交，避免误改无辜文件；
+2. 订阅外部系统（matchMedia/事件源等）场景的 setState-in-effect，标准替代是 `useSyncExternalStore(subscribe, getSnapshot)`——语义等价、首帧即有正确值、无需 useState+useEffect 中转；
+3. "Unused eslint-disable directive" 的 disable 注释直接删除（规则已不再匹配该行）。
+
+### Resolution
+2026-09-03：use-mobile.ts 重写为 useSyncExternalStore、ThemeProvider.tsx 删除失效注释，`npm run lint --max-warnings 0` 恢复 EXIT 0，`tsc --noEmit` EXIT 0。
+
+---
