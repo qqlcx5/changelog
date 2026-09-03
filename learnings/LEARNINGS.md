@@ -81,3 +81,27 @@ Element Plus 文档要求 pnpm 用户为 `dayjs` 配置依赖提升（`shamefull
 并指明"若其他工具链真遇到问题，用 `pnpm add dayjs` 而非 `shamefullyHoist`"。
 
 See Also: PB-20260831-003, ERR-20260831-005
+
+## [LRN-20260903-001] 组件能配置的效果不用 CSS hack：先查安装版 API 再写 :deep 覆盖
+
+**Logged**: 2026-09-03T18:30:00 | **Status**: resolved | **Tags**: element-plus, css, vue
+**See Also**: PB-20260831-003
+
+### Summary
+Element Plus `el-descriptions` 标签列定宽需求，直接用 `:deep()` CSS 覆盖 label `td`，而安装版（2.14.3）已原生提供 `label-width` prop——border 模式下内部实现就是给 label `td` 写内联 `width`，两者完全等价；CSS 只应兜底组件未暴露的能力（如 `table-layout: fixed` 布局算法）。
+
+### Details
+- 场景：详情页 8 组 `el-descriptions` 需要「标签 200px + 内容列均分、组间纵向网格线对齐」；
+- 原实现用 `:deep(.el-descriptions__table) td.el-descriptions__label { width: 200px }`；
+- 核对安装版类型定义（description.d.ts / description-item.d.ts）：容器级 `labelWidth`（"width of every label column"）与 item 级 `labelWidth`（优先级更高）均已存在；
+- 源码核对（descriptions-cell.mjs）：border 模式 `style.width = addUnit(labelWidth)` 直接落在 label `td` 上——与手写 CSS 等价，改配置零行为差异；
+- `width: 100%` 也是冗余的：theme-chalk 默认样式 `.el-descriptions__table { width: 100% }` 已含；
+- 组件确实未暴露的能力才保留 CSS：`table-layout: fixed`（列宽由首行决定——标签列吃 `label-width` 配置、内容列均分剩余宽度，多个独立 descriptions 表格用同一算法才能组间对齐；auto 布局各表格按内容独立算列宽，组间对不齐）与 `overflow-wrap: break-word`（fixed 格子内长文本断行兜底）。
+
+### Suggested Action
+写 `:deep()` 覆盖前先翻**安装版本**的类型定义/源码确认有无对应 prop（配置可维护、被 TS 校验、随组件升级；CSS 覆盖绕过组件抽象，随版本漂移易碎）；覆盖只留组件 API 表达不了的部分，并注释说明「为什么必须用 CSS」。
+
+### Resolution
+2026-09-03：商品主数据详情页改为 `:label-width="200"` 配置，CSS 收敛为 `table-layout: fixed` + `overflow-wrap: break-word` 两项并注明配置边界；lint 门禁通过。
+
+---
