@@ -137,3 +137,4 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 2. **通用字典值域必须核验**：全局 `yes_no` 的 value 是 **1/0**（`sys_dict_value` id=5 是→1、id=6 否→0），**不是 Y/N**——用它配 Y/N 字段，formatter 匹配不上回退显原码，下拉选中提交 `'1'` 去 IN 查 `'Y'` **静默空结果**（比报错更难发现）；
 3. **SQL 只改查询配置**：`compare_type='IN'`；列元数据保持 `TEXT`/`ref_code=NULL`——本地 `search.options` 本就必配（回退兜底），契约生效时 IN 继承覆盖契约 options，配 DICT+ref_code 等于白配；
 4. **前端直接写**：formatter `dictUtils.getDictLabel("commonYN", value, value)`（第三参回退原值）、options `dictUtils.getDictList("commonYN")`——纯读登录缓存，无需预加载；与 MDP 字典码值列同一条「TEXT + IN + 本地 options 继承」链路，仅选项源不同。
+5. **详情页同步适用（2026-09-03 三次增补）**：详情页（detail.vue）码值字段默认原值直出，同页「下单状态」显 Y/N 原码同样被用户要求翻译。通用机制：字段配置加可选 `dictType`（系统字典类型码），渲染统一走 `renderField`——配了 `dictType` 的 `dictUtils.getDictLabel(type, raw, raw)` 翻译（未命中回退原码）、空值统一 `-`，未配的原值直出；`commonYN` 纯读登录缓存无需预加载。以后详情页其他码值字段要翻译只需加配置——但 MDP 字典字段（bd_mdp_dict）勿照抄此机制：getDictLabel 只认系统字典，MDP 码需扩展异步预加载后走 mdpDictUtils。
