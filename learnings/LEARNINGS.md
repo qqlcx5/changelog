@@ -105,3 +105,26 @@ Element Plus `el-descriptions` 标签列定宽需求，直接用 `:deep()` CSS �
 2026-09-03：商品主数据详情页改为 `:label-width="200"` 配置，CSS 收敛为 `table-layout: fixed` + `overflow-wrap: break-word` 两项并注明配置边界；lint 门禁通过。
 
 ---
+
+
+## [LRN-20260903-002] 全局 `.page` 是列表页专用固定高度容器，详情页误用导致内容被裁切
+
+**Logged**: 2026-09-03T19:30:00 | **Status**: resolved | **Tags**: css, layout, element-plus, vue
+**See Also**: LRN-20260903-001
+
+### Summary
+jp-ui 全局 `.page` class（app.scss）自带固定视口高度 `height: calc(100% - 16px)`（含 `!important` 变体），是列表页专用容器（内部靠 jp-table 自滚）；详情页把它当普通内容容器复用后，内容超长即被固定高度裁切，表现为「页面显示不全」。
+
+### Details
+- 场景：5 个详情页（MDP 商品/供应商、SCM 订单、BI 销售、PLM 样品）模板根节点都写了 `class="page p-4"`，内容最长的商品主数据详情（8 组 el-descriptions + 3 个子表 tabs）最先暴露内容被截断；
+- 根因：`.page` 的设计契约是「固定视口高度 + 内部表格区滚动」，详情页内容高度远超视口，容器自身又无滚动，溢出即被裁切；
+- 滚动归属：布局层 `adminui-main` 是 `overflow: auto`，详情页容器只要高度自适应内容，整页滚动天然可用；
+- 隐蔽性：列表页用 `.page` 一切正常，坑只在「内容超高页面」复用该 class 时暴露；全局样式里的 `!important` 高度变体更难排查。
+
+### Suggested Action
+区分容器语义后再复用全局 class：固定视口高度容器（列表页 `.page`）只服务内部自滚的列表布局；详情页/长内容页用高度自适应容器，仅保留卡片外观（白底、圆角、margin、padding），滚动交给布局层；新增页面先判断「滚动归属在容器内还是布局层」再选容器 class，并在 scoped 样式里注释容器选型原因。
+
+### Resolution
+2026-09-03：5 个详情页容器改为 `.detail-page p-4`（高度自适应 + 列表页同款白底卡片外观与外边距），注释说明不用 `.page` 的原因；定向 eslint 门禁通过。
+
+---
