@@ -144,3 +144,26 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 5. **详情页同步适用（2026-09-03 三次增补）**：详情页（detail.vue）码值字段默认原值直出，同页「下单状态」显 Y/N 原码同样被用户要求翻译。通用机制：字段配置加可选 `dictType`（系统字典类型码），渲染统一走 `renderField`——配了 `dictType` 的 `dictUtils.getDictLabel(type, raw, raw)` 翻译（未命中回退原码）、空值统一 `-`，未配的原值直出；`commonYN` 纯读登录缓存无需预加载。以后详情页其他码值字段要翻译只需加配置——但 MDP 字典字段（bd_mdp_dict）勿照抄此机制：getDictLabel 只认系统字典，MDP 码需扩展异步预加载后走 mdpDictUtils。
 6. **详情页全量字典翻译（2026-09-03 四次增补）**：列表有的详情也要——详情页 87 字段按**实体注释为权威**全量配码：注释标「字典 XXX」的配 `mdpDictType`（41 个分类走 mdpDictUtils，onMounted `await loadMdpDicts([...])` 后再请求详情，清单为列表页的全量超集，模块缓存跨页面复用不重复请求）、标「Y/N」的配 `dictType: "commonYN"`（13 个，读登录缓存无需预加载）。两个实现细节：renderField 先判空（`raw == null || raw === ""` → "-"）再分流——getMdpDictLabel 对空值返回空串，不先判空会绕过 "-" 占位符；el-descriptions 是响应式渲染（vxe formatter 非响应式的坑在此不适用），但保持「先 await 字典再请求数据」的列表页同构范式，首屏不闪原码。用户原话「列表不是有说明，列表有的详情也要请求」——镜像页详情与列表的字典口径必须一致，否则验收必返工。
 7. **字典加载与列表请求并行化（2026-09-03 五次增补，用户定型替换串行范式）**：用户原话「列要计算属性，等接口返回相关字段再回显，而不是等待接口全部请求，以后这样的都得这样改」——旧范式「onMounted 中 await loadMdpDicts([...]) 后再 refresh()」让首屏串行等待全部字典接口，被否决。新范式（列表页 vxe）：onMounted 中 `refresh()` 立即发出列表请求 + `loadMdpDicts([...])` 并行（不 await）；字典就绪后 `.then()` 里 `const vxe = proTableRef.value?.tableRef; const rows = vxe?.getTableData()?.fullData || []; if (rows.length) vxe.reloadData(rows);`——**同数据重载**触发 vxe formatter 缓存重建（getCellLabel 按 rowid+colid 缓存、仅数据重载才重算），不重发请求、不改分页；若列表晚于字典返回，数据到达时 formatter 直接命中缓存（无竞态）。副作用：reloadData 重置勾选状态（低概率交互窗口，可接受）。详情页（el-descriptions 响应式渲染）更简单：字典与详情请求直接并行不 await，renderField 读 reactive 缓存依赖自动追踪，字典后到自动重渲——无需 reloadData（vxe 缓存机制仅适用表格）。defineExpose 暴露的 ref 经模板引用访问自动解包（`proTableRef.value?.tableRef?.` 直调 vxe 方法已有 6 页先例）。已同步修订 harness §8.1.2。
+
+## 10. 契约数据版本滞后：pageSchema 返回旧列集——先指纹定位滞后层再修（2026-09-03 增补�?
+
+> 来源：商品主数据扩列�?86 列后实战——磁盘上的新 DML 未落库，/sys/pageSchema 仍只返回旧版 24 列，误以为接口少数据�?
+
+**机制**：pageSchema 返回�?�?建模登记全量列，而是三层交集�?
+
+`sys_menu_form_column.visible_columns`（Redis Hash `sys:cache:menuForm:{tenantId}::menuForm`，field=menuCode，懒加载，直改库不失效）�?`sys_model_table_column` 实时列（FormColumnParser�? 分钟本地缓存）− 角色黑名单（admin 跳过）；id 不在绑定数组时补位首位�?
+
+**判定特征（先定位滞后层，不要先怀疑代码）**：返回列集与某个历史版本 DML �?visible_columns 数组**逐位一�?* + id 在首位（补位特征）→ 运行库停留在该版本。本例返�?24 �?= 08-27 �?23 列绑�?+ id 补位，缺 zsyear�?9-01 才加）、缺 subseries 等（09-03 才加），版本指纹直接指向 08-27 版数据�?
+
+**修复序（任一层滞后都单独足以致旧�?*�?
+
+1. �?*后端实际连接的库**重跑最新幂�?DML（自�?DELETE 清理）；
+2. SQL 指纹核验：`SELECT JSON_LENGTH(visible_columns) FROM sys_menu_form_column WHERE menu_code='xxx' AND del_flag=0;`（应=绑定列数�? `SELECT COUNT(*) FROM sys_model_table_column c JOIN sys_model_table t ON t.id=c.table_id WHERE t.form_code='xxx' AND c.del_flag=0 AND t.del_flag=0;`（应=元数据行数）�?
+3. 清绑定缓存：`HDEL sys:cache:menuForm:{tenantId}::menuForm {menuCode}`（或 DEL �?key）；
+4. 列元数据 5 分钟本地缓存等过期，或重启后端立即生效；
+5. 重新 curl /sys/pageSchema，核对列数与顺序�?
+
+**教训**：磁盘上�?DML 文件 �?库里的数据；直改�?�?缓存失效。契约类接口的返回面是「绑定白名单 × 实时�?× 双层缓存」的交集，任何一层滞后都表现为「少数据」�?
+
+---
+
