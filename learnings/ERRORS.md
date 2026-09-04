@@ -703,3 +703,23 @@ Vite 项目 CI 构建末尾（vite-plugin-pwa → workbox-build → rollup）报
 See Also: ERR-20260903-004
 
 ---
+
+## [ERR-20260904-003] PowerShell 5.1 处理 git 中文文件名八进制转义：内联解码失败、blob 导出有损、控制台读取乱码
+
+**Logged**: 2026-09-04 | **Status**: pending | **Tags**: git, powershell, encoding, filename
+
+### Summary
+git 默认对非 ASCII 路径输出八进制转义（`"\345\270\202..."`），在 PowerShell 5.1 下用内联 `-replace` 解码会产出双重乱码；`git cat-file -p <blob>` 管道/重定向导出含中文的报告会编码有损；GBK 控制台读中文路径文件一律乱码。正确姿势：放弃解码用原始输出人工比对、跨分支取证用 blob 导出后立即回读验证、内容读写全部走工具链不经过控制台。
+
+### Details
+场景：对抗式审查需恢复只存在于另一分支的历史报告（文件不在当前工作区）。连环踩坑：
+1. `git status --short` / `git ls-tree` 输出中文路径为八进制转义串，内联脚本 `-replace '\\([0-7]{3})', {...}` 解码失败——PowerShell 按 GBK 处理管道字节流，解码后得到双重编码损失的乱码。
+2. `git cat-file -p <hash> | Out-File` 导出 UTF-8 中文报告，经管道解码 + Out-File 默认编码双重转换后内容部分有损。
+3. `Get-Content` 直读中文路径文件在 GBK 控制台下显示乱码（后续查看同仓库文件时同样复现），无法据此判断内容正确性。
+
+### Suggested Action
+1. **不要在 PowerShell 内联解码 git 转义文件名**：需要文件名清单时直接用 `git ls-tree` / `git status` 原始输出，把已知八进制串与输出人工比对；或临时 `git -c core.quotepath=false` 让本次命令输出 UTF-8 原文（用 `-c` 进程级参数，勿改全局配置）。
+2. **跨分支取证用 blob 导出**：`git ls-tree <branch> -- <path>` 拿 blob hash → `git cat-file -p <hash>` 落盘；导出后**必须**用文件读取工具（Read/Grep，非控制台）回读验证，内容可辨即可继续用；不可辨改用 `git show <branch>:<path>` 配合输出重定向字节数校验。
+3. **中文路径/内容读写一律走工具链**：Read / Grep / Glob 按 UTF-8 处理；PowerShell 控制台仅用于启动命令与看退出码，不用其判断内容正确性。
+
+---
