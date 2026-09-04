@@ -654,3 +654,28 @@ lint 门禁全绿后突然变红，报错文件却无任何未提交改动——
 2026-09-03：use-mobile.ts 重写为 useSyncExternalStore、ThemeProvider.tsx 删除失效注释，`npm run lint --max-warnings 0` 恢复 EXIT 0，`tsc --noEmit` EXIT 0。
 
 ---
+
+## [ERR-20260904-001] CI 老镜像 glibc < 2.29 导致 rollup 原生二进制 dlopen 失败——pnpm overrides 换 WASM 版
+
+**Logged**: 2026-09-04 | **Status**: resolved | **Tags**: ci, glibc, rollup, pnpm-overrides, wasm
+**See Also**: PB-20260904-002, ERR-20260904-002(LRN), LRN-20260904-001
+
+### Summary
+Vite 项目 CI 构建末尾（vite-plugin-pwa → workbox-build → rollup）报 `ERR_DLOPEN_FAILED`，cause 是 `/lib64/libm.so.6: version 'GLIBC_2.29' not found`——CI 基础镜像是老 glibc（CentOS 7 系，2.17），而 rollup 4.62.3 的 `rollup.linux-x64-gnu.node` 要求 GLIBC_2.29。用 pnpm overrides 把 rollup 换成官方 WASM 版 `@rollup/wasm-node`，一次解决且与 glibc 版本解耦。
+
+### Details
+- 报错定位链：错误主体是 `parseAst.js`（rollup 的 require 链）→ `[cause]` 里才是真因 `GLIBC_2.29 not found`；`ERR_DLOPEN_FAILED` 本身只说明「.node 在但加载不了」，具体缺哪个符号要看 cause；
+- 为什么只有 workbox 挂：vite 8 已走 rolldown（其原生 binding 兼容老 glibc），rollup 只剩 workbox-build（PWA 插件）一条链在用——所以 vite build 成功、generateSW 阶段才崩；
+- 排除项：不是 musl（`/lib64/libm.so.6` 存在即 glibc）；不是 node_modules 平台残留（clean install 后仍复现）；`supportedArchitectures` 声明 `libc` 解决不了「二进制要求更新的 glibc 符号」；
+- 方案对比：换基础镜像（升级 glibc）最彻底但动公司镜像；`@rollup/wasm-node` 是 rollup 官方 drop-in 替换，同版本号、API 一致，只影响 workbox 这条低频路径，代价是 SW 生成慢一点；
+- 坑：`supportedArchitectures` 写多平台（os/cpu/libc 多值）会让 pnpm 把所有平台原生二进制都拉下来（rolldown binding 每个十几 MB），安装体积和时间成倍涨——非必要不加。
+
+### Suggested Action
+1. `pnpm-workspace.yaml` 加 `overrides: { rollup: npm:@rollup/wasm-node@^4.62.3 }`（与 rollup 同版本线）；
+2. CI 脚本 install 后加快速失败校验 `node -e "require('rollup')"`，把 dlopen 失败从构建末尾提前到安装后；
+3. 基础镜像升级到 glibc ≥ 2.29 后移除 override。
+
+### Resolution
+2026-09-04：ding-h5 加 override 后本地 `pnpm build:dev` 全链路通过（vue-tsc + vite build 18.95s + PWA generateSW 生成 sw.js），CI 重跑通过；lockfile 已记录 override，`--frozen-lockfile` 不受影响。
+
+---

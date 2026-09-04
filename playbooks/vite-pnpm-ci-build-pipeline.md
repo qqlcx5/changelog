@@ -127,6 +127,7 @@ rm -rf ./deploy && cp -R ./dist ./deploy
 | `npm cache clear --force` | 无收益且耗时，删掉 |
 | `set -ex` + `cd dir` … `cd ../` | 成对 OK；但流水线若已把工作目录设为子目录，`cd dir` 会失败，优先用绝对路径 / `$WORKSPACE` |
 | Node 版本 | 对齐 `engines.node`（例 `>=22.23.0`），CI 镜像常停在旧 LTS |
+| 老镜像 glibc < 2.29，`ERR_DLOPEN_FAILED` cause 是 `GLIBC_2.29 not found` | `pnpm-workspace.yaml` 加 `overrides: { rollup: npm:@rollup/wasm-node@^4.62.3 }`（仅影响 workbox/PWA 链，vite 8 已走 rolldown）；见 ERR-20260904-001 |
 | pnpm `trustPolicy: no-downgrade` 报签名/trust 错 | 加 `--config.trustPolicy=off`（或按需要排除包） |
 | 构建「卡住」不报错 | 给命令包 `timeout`，把挂死变成报错（参见 ERR-20260828-002） |
 | PowerShell 里用 `$LASTEXITCODE` 判成败 | 会把成功判成失败，见 ERR-20260831-004 |
