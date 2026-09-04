@@ -39,6 +39,7 @@
 | PB-20260904-001 | 钉钉 H5 微应用官方工具链导航（ding CLI / dingtalk-jsapi / dingtalk-mcp） | draft | dingtalk,cli,mcp,jsapi | 2026-09-04 | playbooks/dingtalk-official-dev-toolchain.md |
 | PB-20260904-002 | Vite + pnpm 项目上 CI 流水线的构建脚本排障清单 | draft | ci,pnpm,vite,build-pipeline | 2026-09-04 | playbooks/vite-pnpm-ci-build-pipeline.md |
 | PB-20260904-003 | 大模型 API 对公结算选型清单（2026-09） | draft | llm,api-relay,enterprise-billing,fapiao | 2026-09-04 | playbooks/llm-api-enterprise-billing.md |
+| PB-20260904-004 | Spring Boot 3 + MyBatis-Plus Service 纯 Mockito 单测方案（静态依赖注入 / lambda 列缓存 / surefire 硬编码跳测） | verified | springboot3,mybatis-plus,unit-test,mockito | 2026-09-04 | playbooks/springboot3-mybatis-plus-pure-unit-test.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
