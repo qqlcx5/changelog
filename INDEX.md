@@ -47,5 +47,5 @@
 |---|---|---|---|
 | errors | learnings/ERRORS.md | 22 | 2026-09-03 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
-| learnings | learnings/LEARNINGS.md | 5 | 2026-09-03 |
+| learnings | learnings/LEARNINGS.md | 6 | 2026-09-04 |
 <!-- END:learnings -->

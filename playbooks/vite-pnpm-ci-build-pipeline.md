@@ -53,11 +53,17 @@ registry=https://registry.npmmirror.com/
   1. `corepack enable && corepack prepare pnpm@<packageManager 里的版本> --activate`（推荐，版本与仓库声明一致）；
   2. `npm i -g pnpm@<版本>`（全局装，注意 npm 新版本默认拦截 install scripts，见 ERR-20260831-003）。
 
-## 3. `--ignore-scripts` 会打断 esbuild
+## 3. `--ignore-scripts` 与 esbuild：先验证再下结论
 
-- `pnpm install --ignore-scripts` 跳过 postinstall，esbuild 的平台二进制不落地，vite build 阶段报
-  `You installed esbuild for another platform` / 找不到二进制；
-- 安全顾虑用 pnpm 自带的构建白名单解决，而不是全局禁脚本。`pnpm-workspace.yaml`：
+**常见误判**：「`--ignore-scripts` 会跳过 esbuild 的 postinstall → vite build 必挂」。这条在 esbuild <0.16 成立（当年二进制靠 install.js 现下载），0.16 之后已不成立。
+
+- 真相：`esbuild/lib/main.js` 的 `generateBinPath()` 是 `require.resolve(\`${pkg}/${subpath}\`)`，
+  pkg = `@esbuild/<platform>-<arch>`、subpath = `bin/esbuild`（见 main.js:1691）——走的是 **optionalDependencies 里的平台包**，
+  与 esbuild 自己的 `bin/esbuild`（postinstall 生成）无关；
+- 验证方法：把 `node_modules/esbuild/bin/esbuild` 改名，再跑一次 `transformSync`，成功即证明 JS API 不依赖 postinstall；
+- 结论：**这类工程保留 `--ignore-scripts` 是安全的**，反而更干净（CI 里连 `simple-git-hooks` 装 git hook 都一并跳过）。
+
+真正该做的是用 pnpm 的构建白名单替代「全局禁脚本」的裸奔，而不是二选一。`pnpm-workspace.yaml`：
 
 ```yaml
 allowBuilds:
@@ -66,7 +72,11 @@ allowBuilds:
   simple-git-hooks: true
 ```
 
-- 结论：`pnpm install` 不要加 `--ignore-scripts`；`npm i -g pnpm` 那一行保留无所谓。
+排查套路（扫全仓哪些包真有 install script）：
+
+```bash
+node -e "..."   # 遍历 node_modules/.pnpm/*/node_modules/*/package.json，收集 preinstall/install/postinstall
+```
 
 ## 4. CI 一定要 `--frozen-lockfile`
 

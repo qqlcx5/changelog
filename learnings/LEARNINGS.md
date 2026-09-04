@@ -15,7 +15,7 @@
 ### Details
 - 场景：通用表格组件接入运行期页面契约（接口返回 restricted + forms[].queries），契约生效但 queries 为空数组时，组件用 `schemaContract?.queries?.length` 决定是否走契约分支——空数组 falsy → 落回默认 search 注解，表现为「接口明确说没有查询项，页面却显示全部默认筛选字段」，且请求参数形态随之回落（结构化 conditions → 扁平参数）。
 - 根因：一个布尔开关承载了两种语义——「契约未生效」与「契约生效但无查询项」是两个状态，`?.length` 把后者折叠进了前者。
-- 接口文档已约定「queries 空数组 = 不展示查询区」，是实现违背了契约；排查这类“接口返回空但 UI 不变”问题，先查接口文档的空值语义，再查前端判断条件。
+- 接口文档已约定「queries 空数组 = 不展示查询区」，是实现违背了契约；排查这类"接口返回空但 UI 不变"问题，先查接口文档的空值语义，再查前端判断条件。
 
 ### Suggested Action
 回落开关只绑定功能启用标志（`if (schemaContract.value)`），配置载荷另做空值兜底（`(queries || []).map`）；渲染与请求参数两处必须用同一开关，避免半回落状态；下游要有空字段列表的天然 no-op 路径（搜索区 v-if 不渲染、参数构造返回空对象）。
@@ -128,3 +128,24 @@ jp-ui 全局 `.page` class（app.scss）自带固定视口高度 `height: calc(1
 2026-09-03：5 个详情页容器改为 `.detail-page p-4`（高度自适应 + 列表页同款白底卡片外观），容器样式随后按用户要求收敛至 app.scss 全局定义（各页 scoped 不再重复），页面注释指向全局；定向 eslint 门禁通过。
 
 ---
+
+## [LRN-20260904-001] 判断「某包离了 install script 就跑不了」要先看它怎么定位原生二进制，别凭经验断言
+
+**Logged**: 2026-09-04T20:10:00 | **Status**: resolved | **Tags**: pnpm, esbuild, install-scripts, verification
+**See Also**: PB-20260904-002, ERR-20260831-003
+
+### Summary
+我断言「`pnpm install --ignore-scripts` 会打断 esbuild → vite build 必挂」，实测是错的：esbuild 0.25 的 JS API 不走自己 `bin/esbuild`，而走 optionalDependencies 里的平台包 `@esbuild/<platform>/bin/esbuild`，跳过 postinstall 照样能构建。
+
+### Details
+- 触发：给 ding-h5 设计 CI 脚本，凭「esbuild 靠 postinstall 落地二进制」这条老经验判了死刑；
+- 实测：`node_modules/esbuild/lib/main.js` 的 `generateBinPath()` 里是 `require.resolve(\`${pkg}/${subpath}\`)`（pkg = `@esbuild/win32-x64`，subpath = `bin/esbuild`，见 main.js:1691），与 esbuild 自身 `bin/` 无关；把本地 `node_modules/esbuild/bin/esbuild` 改名后 `transformSync` 仍成功；
+- 老经验的来源：esbuild <0.16 时代没有平台可选包，二进制靠 install.js 现下载，那时 `--ignore-scripts` 确实致命；0.16 之后已改为平台包分发；
+- 全仓扫描确认（`node_modules/.pnpm/*/node_modules/*/package.json`）只有 3 个包带 install script：esbuild（CLI shim，非必需）、core-js（funder 提示）、simple-git-hooks（装 git hook，CI 里本就该跳过）——正好等于 `pnpm-workspace.yaml` 的 `allowBuilds` 白名单，所以 `--ignore-scripts` 在这类工程里是安全的。
+
+### Suggested Action
+判定「必须跑 install script」时按三步走，不要直接下结论：① 读目标包的解析代码（找 `require.resolve` / `binPath`）；② 做一次可逆的破坏性验证（把产物改名再跑 API）；③ 必要时全仓扫一遍哪些包真有 install script，再看白名单是否覆盖。结论落到文档前必须有其一。
+
+### Resolution
+2026-09-04：已实测推翻原判断，并把 PB-20260904-002 第 3 节从「`--ignore-scripts` 会打断 esbuild」改写为「用 allowBuilds 白名单替代全局禁脚本 / 何时可保留 `--ignore-scripts`」。
+
