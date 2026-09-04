@@ -36,6 +36,8 @@
 | PB-20260902-003 | Vite + Vue3 + Vant 接入钉钉 H5 微应用（hybrid 模型：签名 v1.0 + 免登 topapi/v2 + mock 层服务端签名） | verified | dingtalk,vite,vue3,jsapi,mock | 2026-09-03 | playbooks/dingtalk-h5-vite-vue3-vant.md |
 | PB-20260903-001 | 免费大模型 API 平台选型清单（2026-09） | draft | free-api,llm,platform-selection,quota | 2026-09-03 | playbooks/free-llm-api-platforms.md |
 | PB-20260903-002 | Element Plus el-descriptions 标签列统一对齐三件套 | verified | element-plus,vue3,css,layout | 2026-09-03 | playbooks/element-plus-descriptions-label-alignment.md |
+| PB-20260904-001 | 钉钉 H5 微应用官方工具链导航（ding CLI / dingtalk-jsapi / dingtalk-mcp） | draft | dingtalk,cli,mcp,jsapi | 2026-09-04 | playbooks/dingtalk-official-dev-toolchain.md |
+| PB-20260904-002 | Vite + pnpm 项目上 CI 流水线的构建脚本排障清单 | draft | ci,pnpm,vite,build-pipeline | 2026-09-04 | playbooks/vite-pnpm-ci-build-pipeline.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
