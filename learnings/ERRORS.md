@@ -679,3 +679,27 @@ Vite 项目 CI 构建末尾（vite-plugin-pwa → workbox-build → rollup）报
 2026-09-04：ding-h5 加 override 后本地 `pnpm build:dev` 全链路通过（vue-tsc + vite build 18.95s + PWA generateSW 生成 sw.js），CI 重跑通过；lockfile 已记录 override，`--frozen-lockfile` 不受影响。
 
 ---
+
+## [ERR-20260904-002] 本地 tauri build 正式包三道坎：插件版本预检 / updater 签名私钥 / 并发构建锁
+
+**Logged**: 2026-09-04 | **Status**: resolved | **Tags**: tauri, build, version-mismatch, windows
+
+### Summary
+本地 `tauri build` 打正式包连续遇到三道独立关卡：npm 插件升级后 Rust crate 未联动（版本预检硬失败）、`createUpdaterArtifacts: true` 且无签名私钥（bundle 收尾必失败）、两份 build 并发（target 目录锁互等假死）。
+
+### Details
+1. **版本预检**：tauri-cli 构建前校验 npm 插件包与 Rust 插件 crate 的 major/minor 一致，不一致直接 Error 退出（编译都不开始）。npm 侧 `npm install` 在 caret 范围内自动升 minor 而 Cargo.lock 未动即触发。报错形态：`Found version mismatched Tauri packages`，逐对列出两侧版本。
+2. **updater 签名**：`bundle.createUpdaterArtifacts: true` 时构建收尾要对更新产物做 minisign 签名，需要 `TAURI_SIGNING_PRIVATE_KEY`；本地没有（CI 走 GitHub Secrets），release 编译十几分钟会在最后签名步失败。
+3. **并发锁**：两份 `tauri build` 同时跑互相等锁，日志只有一行 `Blocking waiting for file lock on build directory`，无其他线索；tasklist 可见两个 cargo.exe（各自完整进程树 npm → tauri-cli → cargo → rustc）。
+
+### Suggested Action
+1. 版本预检失败：Cargo.toml 插件声明是宽松 `"2"` 时无需改 manifest，用 `cargo update -p tauri-plugin-log -p tauri-plugin-updater -p tauri-plugin-dialog -p tauri-plugin-fs -p tauri-plugin-notification` 把 Rust 侧精准升到与报错中 npm 侧相同的 minor 即可，不动其他依赖；
+2. 本地无签名私钥：把 `createUpdaterArtifacts` 改 false（exe/msi 照常产出）或提供 TAURI_SIGNING_PRIVATE_KEY；打包前预检 `Get-ChildItem Env:TAURI*`；
+3. 锁互等：用 `Get-CimInstance Win32_Process` 按命令行识别进程（node 只杀含 tauri.js / npm-cli run tauri 的，切勿按映像名全杀 node——IDE 本身也是 node），`taskkill /PID <树根> /T /F` 连进程树整组清掉，确认无残留后单实例重跑。
+
+### Resolution
+2026-09-04：createUpdaterArtifacts 置 false 并保留；cargo update 五插件对齐（dialog 2.7.3 / fs 2.5.2 / log 2.9.1 / notification 2.4.0 / updater 2.11.0，与 npm 完全一致）；两棵构建树 11 个进程清杀干净，交还用户单实例手动打包。
+
+See Also: ERR-20260903-004
+
+---
