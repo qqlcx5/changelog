@@ -1,4 +1,4 @@
-﻿# Errors — 命令失败与集成故障记录
+# Errors — 命令失败与集成故障记录
 
 > 追加式分轨日志（id 前缀 `ERR`）。条目格式见 [WORKFLOW.md](../WORKFLOW.md) 第 4.2 节。
 > 同一 Pattern 复现 ≥3 次（See Also 链接计数）应提炼为 playbook（WORKFLOW.md 第 6 节）。
@@ -725,7 +725,7 @@ git 默认对非 ASCII 路径输出八进制转义（`"\345\270\202..."`），�
 ---
 ## [ERR-20260907-001] 前端「菜单打不开」根因是共享库停留在旧版脚本——版本错位三层核对 + 无客户端时用 .m2 JDBC 驱动直查实库
 
-**Logged**: 2026-09-07 | **Status**: pending | **Tags**: jeeplus, dynamic-menu, database, diagnostic
+**Logged**: 2026-09-07 | **Status**: resolved | **Tags**: jeeplus, dynamic-menu, database, diagnostic
 
 ### Summary
 动态菜单系统里「菜单打不开」要先查数据库实态再怀疑代码：本例共享库被执行过旧版基线脚本（menu_code=marketQualityHome 体系），而代码分支已重构命名（marketQuality/replenishApply 体系）——旧菜单 href 指向前端已删除的路由，新版菜单、业务表、pageSchema 表单模型又从未入库，三层错位同时存在。
@@ -741,5 +741,13 @@ git 默认对非 ASCII 路径输出八进制转义（`"\345\270\202..."`），�
 1. 动态菜单类故障的诊断顺序：代码路由映射机制 → 菜单 DML 脚本审查 → 实库 SELECT（sys_menu 全量含 del_flag、information_schema.tables、表单模型三表）——实库是唯一能终结猜测的证据层；
 2. 修复 = 清理旧版残留（按旧版 menu_code/form_code/dict type 写 DELETE，入库为正式清理脚本）→ 按依赖顺序重跑当前分支 DDL→DML → 刷新后端缓存（reloadSysCache 或重启）→ 前端退出重新登录（localStorage 菜单缓存必须重新登录才更新）；
 3. 写多页面菜单 SQL 的两条军规：重建共享父节点的脚本，DELETE 清单必须覆盖挂在该父节点下的全部子孙 menu_code，否则重跑产生孤儿菜单（树上消失且无报错）；parent_ids 拼接 CONCAT 时每段 id 后都要补逗号。
+
+4. 多分支平行交付同一功能 + 共享开发库 = 系统性错位风险：任一方向在库上执行过菜单 DML 后，checkout 到另一分支必现「菜单打不开」（本条第 2 次发生即此形态：库上午被 prd 分支脚本刷成 marketQuality 体系，10 分钟后切回 qoder 分支）。切分支前先确认库内菜单体系归属，切后用一条 SELECT 比对 href 与前端 views 目录；
+5. 排查两个坑：① git reflog 的 checkout 时间戳 + sys_menu.create_time 交叉，可还原「谁在何时刷了库/切了分支」时间线，一条证据链终结猜测；② LEFT JOIN 判「是否绑定」必须 COUNT(右表列)——COUNT(*) 按左表行计数，无匹配也返回 1，本次险些据此误判；菜单无任何角色绑定却可见 → 当前账号是超管（绕过角色过滤），重建菜单后无需授权即可见。
+
+### Resolution
+
+2026-09-07（第 1 次）：清理旧版 marketQualityHome 体系残留 → 按依赖顺序重跑 marketQuality 体系 DDL/DML → reloadSysCache → 前端重新登录，菜单恢复。
+2026-09-07（第 2 次，同日反向复现）：共享库 10:07 被 prd 分支《补配配置菜单权限.sql》刷成 marketQuality 体系（但未建 biz_replenish_* 物理表，pageSchema 指向空表），10:18 用户 checkout 切回 qoder 分支 → href=/market/replenish* 与 views/marketReplenish/* 错位，菜单点开空白。修复面比第 1 次扩大：除 sys_menu（含 sys_role_menu 绑定残留）外还需清 pageSchema 三表（sys_model_table/column/column_query）、sys_menu_form_column、sys_language key；与目标体系不冲突的字典（replenish_* 主单据字典 9 个）保留不动。清理脚本已入库为《市场补配菜单修复-清理prd残留.sql》，幂等可重跑。
 
 ---
