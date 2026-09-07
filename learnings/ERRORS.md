@@ -750,4 +750,36 @@ git 默认对非 ASCII 路径输出八进制转义（`"\345\270\202..."`），�
 2026-09-07（第 1 次）：清理旧版 marketQualityHome 体系残留 → 按依赖顺序重跑 marketQuality 体系 DDL/DML → reloadSysCache → 前端重新登录，菜单恢复。
 2026-09-07（第 2 次，同日反向复现）：共享库 10:07 被 prd 分支《补配配置菜单权限.sql》刷成 marketQuality 体系（但未建 biz_replenish_* 物理表，pageSchema 指向空表），10:18 用户 checkout 切回 qoder 分支 → href=/market/replenish* 与 views/marketReplenish/* 错位，菜单点开空白。修复面比第 1 次扩大：除 sys_menu（含 sys_role_menu 绑定残留）外还需清 pageSchema 三表（sys_model_table/column/column_query）、sys_menu_form_column、sys_language key；与目标体系不冲突的字典（replenish_* 主单据字典 9 个）保留不动。清理脚本已入库为《市场补配菜单修复-清理prd残留.sql》，幂等可重跑。
 
+2026-09-07（第 3 次，同日新变体——进程错位而非库错位）：接口报「错误:脚本执行异常」通用脱敏文案，实库两张业务表已建齐、列结构与实体完全一致仍复现。根因：后端 JVM 10:05 自 prd 分支编译启动（target/classes 只有 prd 的 ReplenishReasonController），10:18 切回 qoder 分支后未重启——prd 与 qoder 两分支的 Controller 路径（/market/replenishReason）与权限码（market:replenishReason:list）完全同名，请求可正常路由鉴权，但 prd 实体查的表是 biz_replenish_reason（不存在）→ 1146 → ExceptionTranslator 统一脱敏文案。用户按 qoder DDL 建 biz_market_replenish_reason 自然无效——建表动作与运行进程查询的表名根本对不上。判定证据链：Get-CimInstance Win32_Process 进程启动时间 vs git reflog checkout 时间戳交叉 + target/classes 中孤儿类与缺失类存在性比对（prd 的 .class 在、qoder 的不在 = 运行的是 prd 代码）。修复：停止进程 → Rebuild Project → 重启 → reloadSysCache → 前端重新登录。两条军规：①错位有三个独立层（库 DML、源码分支、运行中 JVM 进程），任一层落后都产生症状且症状不同——库错位→菜单空白/契约失效，进程错位→接口 SQL 异常但库表齐全；三方核对顺序：实库 SELECT → git reflog → 进程启动时间 vs .class 时间戳。②切分支后重启后端必须 Rebuild（清空输出目录）而非增量编译——IDEA 增量编译不清孤儿类，prd/qoder 双 Controller 同路径共存会触发 Spring ambiguous mapping 直接启动失败。
+
+---
+
+## [ERR-20260907-002] JeePlus 字典 DML 漏隐藏必填列 parentcode：INSERT 报 1364，字典静默缺失
+
+**Logged**: 2026-09-07 | **Status**: resolved | **Tags**: jeeplus, mysql, dml, dict, schema-drift
+
+### Summary
+
+按仓库基线 DDL 的列清单写 `sys_dict_value` INSERT，在共享库执行必报 1364 Field 'parentcode' doesn't have a default value——目标库表结构比脚手架基线多了 NOT NULL 无默认值的业务列，且脚本先 DELETE 后 INSERT，字典从此「从未插入成功」而静默缺失（页面品类列显示原始码值而非翻译，无任何报错）。
+
+### Details
+
+- 现象：字典 DML 执行报 1364；若用逐条自动提交的执行器重跑，DELETE 已生效、INSERT 失败——字典处于被删空状态（幂等脚本重跑可恢复，但要意识到中间态页面已无字典可用）；
+- 根因：共享库 `sys_dict_value` 有 `parentcode varchar(64) NOT NULL` 无默认值（既有字典 commonYN/scrap_category 的 parentcode 均为空串），仓库基线 DDL 无此列，按基线写的 INSERT 列清单必缺它；
+- 一般化：目标共享库的表结构 ≠ 仓库基线 DDL（多团队/多分支各自加列），跨环境执行 INSERT 前必须用 information_schema 核对 `is_nullable='NO' AND column_default IS NULL` 的隐藏必填列；
+- 连带发现：`sys_language` 唯一必填列是 id（脚本已供 UUID）无此问题——每张表独立核对，不能类推；
+- 补列时的错位陷阱：列清单把 parentcode 放在 status 与 create_by_id 之间，VALUES 的空串必须插在对应位置——只往行尾追加会造成「列数一致但语义错位」（parentcode 拿到 create_by_id 的值，datetime 列拿到 'admin'，执行期报 1292）。
+
+### Suggested Action
+
+1. 跨环境执行 INSERT 前先查目标库隐藏必填列：`SELECT column_name FROM information_schema.columns WHERE table_schema=? AND table_name=? AND is_nullable='NO' AND column_default IS NULL`——差集列全部显式补值，口径对齐既有行（空串/0）；
+2. 幂等 DELETE+INSERT 脚本失败后，先确认当前是「事务回滚后的原状」还是「逐条提交后的删空态」，两者都可用重跑恢复；
+3. 批量补列用模式化替换（如 `, '1', '1', NOW()` → `, '1', '', '1', NOW()`）而非逐行尾追加，替换后逐列对齐复核一遍。
+
+### Resolution
+
+2026-09-07：《市场补配字典.sql》两处 sys_dict_value INSERT 列清单补 parentcode、37 行 VALUES 在 status 与 create_by_id 之间补空串（与既有行口径一致）；重跑后品类 3 项 + 省份 34 项入库，页面品类列翻译恢复。
+
+See Also: ERR-20260907-001
+
 ---
