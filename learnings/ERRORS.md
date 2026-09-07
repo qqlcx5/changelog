@@ -811,3 +811,32 @@ See Also: ERR-20260907-001
 
 ---
 
+
+## [ERR-20260907-004] 一次性清理 DML 脚本绕过门禁：修复类 SQL 同样是新增代码，别名命中 S-W2
+
+**Logged**: 2026-09-07 | **Status**: resolved | **Tags**: sql, architecture-gate, legacy-freeze, review
+
+### Summary
+
+一次性「清理/修复」类 SQL 脚本被当作临时产物直接提交，未经 arch-check-sql 门禁，`DELETE rm FROM sys_role_menu rm JOIN sys_menu m ...` 的表别名新增 4 处 S-W2 违规，使此前记录的「门禁全绿」交接状态失真；对抗式审查复跑门禁才暴露。
+
+### Details
+
+- 背景：分支切换事故（另一分支菜单脚本污染共享库）后赶写的菜单清理脚本及其 rollback，用 `DELETE rm FROM sys_role_menu rm JOIN sys_menu m ON rm.menu_id = m.id WHERE m.menu_code IN (...)` 形式删角色绑定；
+- 为什么错：多表 DELETE 的 `rm`/`m` 属于缩写别名，违反「列名一律全表名限定（别名必须等于表名）」规范；门禁以冻结清单判定「新增命中」，别名是 commit 后第一次复跑 arch-check-all 才被发现（SQL 端 exit 1，新增 4）；
+- 深层教训：验证证据有时效——最后一次绿色门禁之后任何 commit 都会使其失效，仍引用旧记录的交接/进度文件会误导下个会话；
+- 正确改写（MySQL 合法、语义等价）：子查询表不是删除目标表时，可用 `DELETE FROM sys_role_menu WHERE sys_role_menu.menu_id IN (SELECT sys_menu.id FROM sys_menu WHERE sys_menu.menu_code IN (...))`——零别名、全表名限定，幂等可重跑。
+
+### Suggested Action
+
+1. 任何新建/编辑的 SQL 文件（含清理、修复、迁移、rollback）一律先跑 arch-check-sql 再提交，不存在「一次性脚本免检」；
+2. 多表 DELETE 需要按另一表过滤时优先改写为 `DELETE FROM target WHERE target.col IN (SELECT other.col ...)`；若必须 JOIN 形式，列限定用全表名；
+3. 会话收尾若在最后一次门禁之后又产生 commit，必须复跑门禁并同步更新交接/进度文件中的绿色声明。
+
+### Resolution
+
+2026-09-07：两个脚本 4 处别名全部改写为全表名子查询形式，复跑 arch-check-sql exit 0（S-W2 命中 230 = 冻结 230 / 新增 0），交接与进度文件同步订正。
+
+See Also: ERR-20260907-001
+
+---
