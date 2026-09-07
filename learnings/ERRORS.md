@@ -917,3 +917,24 @@ AI 生成的测试用例 / 自动化脚本引用了系统里不存在的自造�
 4. 会话交接中的「已删除 / 已修改」声明，一律以独立读取通道的观测为准，不以工具回执为准。
 
 ---
+
+## [ERR-20260907-008] 在 agent 命令行里直接跑长命令（mvn compile）被「空闲超时」取消，且 `mvn` 不在 PATH
+
+**Logged**: 2026-09-07 | **Status**: resolved | **Tags**: maven, windows, powershell, tooling, timeout
+
+### Summary
+`mvn -q -o -pl <module> -am compile` 在 agent 的 shell 里跑了几十秒后被判「Idle timeout - no output for too long」取消；且 `-q` 静默模式下过程无输出，加上 `mvn` 本身不在 PATH，一连串失败让人误以为编译有问题。
+
+### Details
+- 现象：① `mvn : 无法将“mvn”项识别为 cmdlet…`（不在 PATH）；② 用绝对路径后加了 `-q`，编译 40+ 秒无任何输出，工具按空闲超时杀掉进程，返回 Execution Cancelled；③ 实际上编译本身没问题（后台跑完 BUILD SUCCESS）。
+- 根因：agent 命令行按「无输出」判空闲，静默模式 + 编译耗时 = 必超时；这是工具行为不是构建问题。
+- 环境事实（本机）：Maven 在 `D:\apache-maven-3.6.3\bin\mvn.cmd`，`JAVA_HOME=D:\JDK`；项目 `fast-gate.ps1` 里已有同样的探测逻辑（PATH → 该 fallback）。
+
+### Suggested Action
+1. 长命令一律改**后台进程 + 日志轮询**：`Start-Process -FilePath <mvn.cmd> -ArgumentList '-o','-llr','-pl','<module>','-am','compile','-DskipTests' -WorkingDirectory <dir> -RedirectStandardOutput <log> -RedirectStandardError <err> -NoNewWindow`，不阻塞；随后另起一条命令 `Get-Content <log> -Tail n` 轮询结果。
+2. 编译命令**不要加 `-q`**（或同时重定向到文件），保证有输出或至少可事后取证。
+3. 先 `Start-Process` 前设 `$env:JAVA_HOME`，子进程会继承；mvn 路径优先从项目脚本（如 `fast-gate.ps1` 的 `Get-MvnCmd`）里抄，不要猜。
+
+### Resolution
+2026-09-07：按后台进程 + 日志方式复跑，`qcm-admin -am compile` 两次均 BUILD SUCCESS（48s / 33s），结论确认为工具空闲超时而非构建失败。
+

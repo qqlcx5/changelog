@@ -49,7 +49,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 32 | 2026-09-07 |
+| errors | learnings/ERRORS.md | 33 | 2026-09-07 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
-| learnings | learnings/LEARNINGS.md | 7 | 2026-09-04 |
+| learnings | learnings/LEARNINGS.md | 8 | 2026-09-07 |
 <!-- END:learnings -->
