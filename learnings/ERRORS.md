@@ -893,3 +893,27 @@ AI 生成的测试用例 / 自动化脚本引用了系统里不存在的自造�
 4. 发现存量虚构引用 → 登记 pending 项交用户决策（对齐改写 / 作废重生成），不静默沿用也不静默修数据。
 
 ---
+
+## [ERR-20260907-007] 文件工具回执三连失真：SearchReplace 假失败、DeleteFile 假成功、PowerShell 行数缩水
+
+**Logged**: 2026-09-07 | **Status**: pending | **Tags**: qoder, tooling, verification, powershell
+
+### Summary
+
+同一轮 harness gc 清理连遇三种「回执与磁盘实际状态不符」：① SearchReplace 报 save failed 但两处替换实际已落盘（重试反而 match failed）；② DeleteFile 报 success 但 pyc 文件仍在盘上（Test-Path 复核为 True）；③ PowerShell（经 sandbox / Node fallback 代理执行）`(Get-Content f).Count` 对 116 行文件只报 94。结论：写 / 删 / 计数类操作的回执都不可单独采信，关键状态断言前必须用独立通道（Test-Path / python 二进制读取）复核。
+
+### Details
+
+- ① SearchReplace 误报：第一次调用报「save file failed, reason: unknown」，重读文件发现两处替换均已生效；再重试报「match failed」（原文已不在）。误报会诱导「无害重试」，若实际是部分落盘，盲目重试可能破坏已生效内容；
+- ② DeleteFile 误报：删除源已不存在的 `__pycache__` 残留 pyc，工具返回 success；后续 `Get-ChildItem` 仍列出该文件、`Test-Path` 返回 True，最终 PowerShell `Remove-Item -Force` 才真正删除；
+- ③ 行数统计失真：对 116 行的 AGENTS.md，`Measure-Object -Line` 报 83、`(Get-Content f).Count` 报 94（命令经 Node fallback 代理执行，疑似多字节行传输截断）；python `io.open(f, encoding='utf-8').read().count('\n')` 得真实值 116——该文件有 <120 行硬约束，靠 PowerShell 数字验收会得出「远低于上限」的错误结论；
+- 共同根因：工具 API 回执与磁盘副作用之间无事务保证，中间叠加 sandbox / Node fallback 代理层后不确定性进一步放大。
+
+### Suggested Action
+
+1. SearchReplace 报 save failed：先重读目标文件核实哪些替换已生效，再决定是否重试；禁止直接重试；
+2. DeleteFile 后：用 Test-Path / Get-ChildItem 复核；仍在则改用 `Remove-Item -Force`；
+3. 行数 / 计数类验收断言：用 python 二进制读取统计，不依赖 PowerShell 管道（尤其输出标注「Node fallback executed」时）；
+4. 会话交接中的「已删除 / 已修改」声明，一律以独立读取通道的观测为准，不以工具回执为准。
+
+---
