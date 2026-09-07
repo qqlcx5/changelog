@@ -723,3 +723,23 @@ git 默认对非 ASCII 路径输出八进制转义（`"\345\270\202..."`），�
 3. **中文路径/内容读写一律走工具链**：Read / Grep / Glob 按 UTF-8 处理；PowerShell 控制台仅用于启动命令与看退出码，不用其判断内容正确性。
 
 ---
+## [ERR-20260907-001] 前端「菜单打不开」根因是共享库停留在旧版脚本——版本错位三层核对 + 无客户端时用 .m2 JDBC 驱动直查实库
+
+**Logged**: 2026-09-07 | **Status**: pending | **Tags**: jeeplus, dynamic-menu, database, diagnostic
+
+### Summary
+动态菜单系统里「菜单打不开」要先查数据库实态再怀疑代码：本例共享库被执行过旧版基线脚本（menu_code=marketQualityHome 体系），而代码分支已重构命名（marketQuality/replenishApply 体系）——旧菜单 href 指向前端已删除的路由，新版菜单、业务表、pageSchema 表单模型又从未入库，三层错位同时存在。
+
+### Details
+症状：市场补配菜单点击后无内容。三层排查定位：
+1. **前端路由机制**：动态菜单存 localStorage（登录时写入），`filterAsyncRouter` 把 href 作为组件路径，`loadComponent` 在 `import.meta.glob(views/**/*.vue)` 里匹配，匹配不到落 empty 空组件——组件缺失不报错只渲染空白；
+2. **菜单 DML 脚本静态审查**：发现两个脚本缺陷——重建共享父节点（marketReplenish）的配置脚本 DELETE 清单不含挂其下的主单据菜单（重跑即孤儿化，树上消失）；主单据脚本 parent_ids 拼接 CONCAT 缺逗号（'1,rootIdfolderId,'）；
+3. **数据库实态（决定性证据）**：sys_menu 里只有旧版菜单树（menu_code/href 与当前代码全不匹配）+ 一个新版空壳一级节点；biz_replenish_* 业务表、sys_model_table 表单模型、sys_menu_form_column 列契约全部缺失；旧节点的 create_time 证明执行的是基线提交版本的脚本，当前分支的 DDL/DML 从未执行。
+诊断技巧：本机无 mysql 客户端时，用 `~/.m2` 仓库里现成的 mysql-connector-j jar + Java 11+ 单文件源码模式（`java -cp driver.jar DbCheck.java`）做只读直查，比装客户端轻量；PowerShell 控制台中文乱码不影响 id/menu_code/href 等 ASCII 字段判读。
+
+### Suggested Action
+1. 动态菜单类故障的诊断顺序：代码路由映射机制 → 菜单 DML 脚本审查 → 实库 SELECT（sys_menu 全量含 del_flag、information_schema.tables、表单模型三表）——实库是唯一能终结猜测的证据层；
+2. 修复 = 清理旧版残留（按旧版 menu_code/form_code/dict type 写 DELETE，入库为正式清理脚本）→ 按依赖顺序重跑当前分支 DDL→DML → 刷新后端缓存（reloadSysCache 或重启）→ 前端退出重新登录（localStorage 菜单缓存必须重新登录才更新）；
+3. 写多页面菜单 SQL 的两条军规：重建共享父节点的脚本，DELETE 清单必须覆盖挂在该父节点下的全部子孙 menu_code，否则重跑产生孤儿菜单（树上消失且无报错）；parent_ids 拼接 CONCAT 时每段 id 后都要补逗号。
+
+---
