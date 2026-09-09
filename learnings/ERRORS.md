@@ -938,3 +938,33 @@ AI 生成的测试用例 / 自动化脚本引用了系统里不存在的自造�
 ### Resolution
 2026-09-07：按后台进程 + 日志方式复跑，`qcm-admin -am compile` 两次均 BUILD SUCCESS（48s / 33s），结论确认为工具空闲超时而非构建失败。
 
+---
+
+## [ERR-20260909-001] Chromium/多开浏览器报 Unable to move the cache (0x5) 与 Gpu Cache Creation failed: -2——profile 目录被残留内核进程锁死
+
+**Logged**: 2026-09-09 | **Status**: resolved | **Tags**: chromium, electron, cache, file-lock, windows
+
+### Summary
+
+多开/指纹浏览器环境（Playwright launchPersistentContext 每环境独立 userDataDir）启动时 Chromium 报三连 `Unable to move the cache: 拒绝访问 (0x5)` + `Unable to create cache` / `Gpu Cache Creation failed: -2`：上一次崩溃/强杀后仍存活的内核进程锁住了该环境 profile 目录下的缓存子目录，Chromium 迁移/重建缓存目录时被 Windows 拒绝访问。修复 = 每次启动前按 profile 路径精确强杀残留进程，并 best-effort 删除 GPU 着色器缓存目录。
+
+### Details
+
+- 报错定位：`net\disk_cache\cache_util_win.cc`（0x5 = ERROR_ACCESS_DENIED，移动缓存目录失败）→ `net\disk_cache\disk_cache.cc:236`（创建失败 -2）→ `gpu\ipc\host\gpu_disk_cache.cc:724`（GPU 磁盘缓存创建失败）；这些是**非致命**错误，浏览器仍能启动，但着色器缓存不工作且日志刷屏；
+- 根因：孤儿内核进程（主进程崩溃/被强杀后 Chromium 子进程仍挂着 `envs/{id}/profile`）持有缓存目录内文件句柄；原架构只在**应用启动时**做一次孤儿清理（按命令行匹配 userData/envs 路径强杀），单个环境在应用运行期间崩溃后再次启动，不会触发清理；
+- 修复落点（fingerprint-browser `src/main/launcher/launch.ts`）：launchPersistentContext 之前插入两步——① 复用已有 `killByProfileDir(id)`（按单环境 profile 目录精确匹配命令行强杀，不误杀其他 Chromium）+ 150ms 等待句柄释放；② `repairGpuCacheDirs`：`fs.rm(join(profile, 'ShaderCache'|'GrShaderCache'|'GraphiteDawnCache'|'DawnCache'|'GPUCache'), { recursive: true, force: true })` 逐目录 best-effort 删除（失败静默吞掉）；
+- 安全边界：只删可再生成的缓存目录（体积小、无用户数据），不触碰 Cookies / Local State / Cache(HTTP) 等，避免每次启动丢网络缓存；`force: true` 保证目录不存在时不报错；
+- 通用化：任何「同一 userDataDir 多进程」的 Chromium 场景（Electron 自定义 userData、CDP、浏览器自动化）出现 0x5 缓存移动失败，排查方向都是「谁还拿着这个目录」——残留进程 / 杀毒软件实时扫描 / OneDrive 同步锁定。
+
+### Suggested Action
+
+1. 每环境启动前先按 profile 路径精确匹配命令行强杀残留进程（Windows 用 `Get-CimInstance Win32_Process` 枚举 + `taskkill /PID x /T /F`），杀完等 150ms 再动目录；
+2. 启动前 best-effort 删除 GPU 着色器缓存子目录（ShaderCache / GrShaderCache / GraphiteDawnCache / DawnCache / GPUCache），Chromium 会自动重建，无数据损失；
+3. 若清理后仍复现 0x5：查杀毒软件实时扫描与 OneDrive/网盘同步是否锁目录，考虑把 profile 目录移出同步盘。
+
+### Resolution
+
+2026-09-09：fingerprint-browser launchEnv 在 launchPersistentContext 前加入 killByProfileDir + repairGpuCacheDirs（步骤 4），`pnpm typecheck` 通过。
+
+---
+
