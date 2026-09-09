@@ -42,7 +42,7 @@
 | PB-20260907-002 | New API 用量与 token 统计落地配置（看板 / 倍率 / 查询 API / 长期留存） | draft | new-api,token-stats,billing,ai-gateway | 2026-09-07 | playbooks/new-api-token-usage-stats.md |
 | PB-20260904-003 | 大模型 API 对公结算选型清单（2026-09） | draft | llm,api-relay,enterprise-billing,fapiao | 2026-09-04 | playbooks/llm-api-enterprise-billing.md |
 | PB-20260904-004 | Spring Boot 3 + MyBatis-Plus Service 纯 Mockito 单测方案（静态依赖注入 / lambda 列缓存 / surefire 硬编码跳测） | verified | springboot3,mybatis-plus,unit-test,mockito | 2026-09-04 | playbooks/springboot3-mybatis-plus-pure-unit-test.md |
-| PB-20260908-001 | 用 Dockge 部署 Sub2API（compose.yaml + 环境变量 + 坑点） | draft | sub2api,dockge,docker-compose,selfhosted | 2026-09-08 | playbooks/sub2api-dockge-deploy.md |
+| PB-20260908-003 | 用 Dockge 部署 Sub2API（compose.yaml + 环境变量 + 坑点） | draft | sub2api,dockge,docker-compose,selfhosted | 2026-09-08 | playbooks/sub2api-dockge-deploy.md |
 | PB-20260908-001 | Dockge 部署（Docker Compose 管理面板）标准步骤 | draft | docker,dockge,compose,self-host | 2026-09-08 | playbooks/dockge-deploy.md |
 | PB-20260908-002 | Antigravity 免 TUN 模式代理（Windows DLL 注入 + macOS 扩展） | draft | antigravity,proxy,no-tun,windows | 2026-09-08 | playbooks/antigravity-proxy-without-tun.md |
 <!-- END:playbooks -->
@@ -52,7 +52,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 34 | 2026-09-09 |
+| errors | learnings/ERRORS.md | 35 | 2026-09-09 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 | learnings | learnings/LEARNINGS.md | 8 | 2026-09-07 |
 <!-- END:learnings -->

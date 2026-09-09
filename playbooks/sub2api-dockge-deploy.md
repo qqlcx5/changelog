@@ -1,5 +1,5 @@
 ---
-id: PB-20260908-001
+id: PB-20260908-003
 type: playbook
 title: 用 Dockge 部署 Sub2API（compose.yaml + 环境变量 + 坑点）
 tags: [sub2api, dockge, docker-compose, selfhosted]

@@ -968,3 +968,29 @@ AI 生成的测试用例 / 自动化脚本引用了系统里不存在的自造�
 
 ---
 
+
+## [ERR-20260909-002] 国内免费 IP 检测接口实测：多个"知名"接口不可用，选型必须先 curl 实测
+
+**Logged**: 2026-09-09 | **Status**: resolved | **Tags**: ip-geolocation, api, china, proxy, selection
+
+### Summary
+给 fingerprint-browser 的出口测试双源（原 ipinfo.io + ipwho.is）换国内源时，逐个实测发现多个常被推荐的国内 IP 检测接口不可用，文档/博客推荐不可信，必须先 curl 验证再接入。
+
+### Details
+- `https://ip.useragentinfo.com/json`：返回空 body（带/不带 UA 均空），疑似对本机网络或客户端有过滤；
+- `https://api.vore.top/api/IPdata`：服务端 PHP Fatal error（Redis MISCONF，服务方自身故障），返回 HTML 而非 JSON；
+- `https://qifu-api.baidubce.com/ip/local/geo/v1/district`（百度千帆，博客大量推荐）：返回 `ResourceNotFound`，接口已下线或路径变更；
+- `https://2024.ipchaxun.com/`：空响应；
+- ✅ `https://api.mir6.com/api/ip_json`：可用，JSON 含 `data.ip` + `data.countryCode`（ISO 3166-1 alpha-2，可直接消费）；
+- ✅ `https://myip.ipip.net/json`：可用，JSON 含 `data.ip` + `data.location`（数组，[0] 为中文国名如"中国/美国"），需自建中文国名→ISO 映射；
+- 通用教训：国内免费接口无 SLA，接口会静默下线/返回 HTML 错误页，接入前实测 + 双源并行 + 严格 JSON 解析（非 JSON 即视为该源失败）是必要的。
+
+### Suggested Action
+1. 选国内 IP 检测源时先 `curl -s <url>` 确认返回 JSON 且字段与文档一致，再看连通性稳定性；
+2. 解析层对嵌套字段（`data.ip`、`data.countryCode`、`location` 数组）做空值防御，字段缺失返回空由上层兜底，不让单源失败拖垮整体；
+3. 中文国名接口需维护国名→ISO 映射表（覆盖常见代理出口国家/地区即可），未命中置空。
+
+### Resolution
+2026-09-09：fingerprint-browser `src/main/proxy/testEgress.ts` 默认双源改为 `api.mir6.com/api/ip_json`（首选，直接给 ISO 码）+ `myip.ipip.net/json`（备选，中文国名映射 ISO），lint 通过，doc/tasks/04-proxy.md 同步更新。
+---
+
