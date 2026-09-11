@@ -45,6 +45,7 @@
 | PB-20260908-003 | 用 Dockge 部署 Sub2API（compose.yaml + 环境变量 + 坑点） | draft | sub2api,dockge,docker-compose,selfhosted | 2026-09-08 | playbooks/sub2api-dockge-deploy.md |
 | PB-20260908-001 | Dockge 部署（Docker Compose 管理面板）标准步骤 | draft | docker,dockge,compose,self-host | 2026-09-08 | playbooks/dockge-deploy.md |
 | PB-20260908-002 | Antigravity 免 TUN 模式代理（Windows DLL 注入 + macOS 扩展） | draft | antigravity,proxy,no-tun,windows | 2026-09-08 | playbooks/antigravity-proxy-without-tun.md |
+| PB-20260910-001 | Windows 上 git pull/push 因文件名含非法字符（`<` `>`）失败的绕过与恢复 | verified | git,windows,filename,recovery | 2026-09-10 | playbooks/git-windows-illegal-filename.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
