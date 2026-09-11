@@ -179,6 +179,9 @@ function sanitizeMarkdown(dir) {
     } else if (full.endsWith(".md")) {
       let content = fs.readFileSync(full, "utf8");
 
+      // 0. 转义 Vue Mustache 插值语法 {{ 与 }}，防止 SSR 阶段把文档里的 {{ ... }} 当作 JS 表达式求值崩溃
+      content = content.replace(/\{\{/g, "&#123;&#123;").replace(/\}\}/g, "&#125;&#125;");
+
       // 1. 转义数学/比较符号：<数字 (如 <120, <0.16, < 2.29, <50MB 等)
       content = content.replace(/<(\s*\d+)/g, "&lt;$1");
 
