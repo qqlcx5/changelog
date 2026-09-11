@@ -51,6 +51,9 @@ jobs:
           quartz_config: .github/quartz/quartz.config.ts
           quartz_layout: .github/quartz/quartz.layout.ts
 
+      - name: Generate CNAME
+        run: echo "feyoudao.cn" > public/CNAME
+
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
