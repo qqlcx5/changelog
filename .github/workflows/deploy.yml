@@ -1,4 +1,4 @@
-name: Deploy Quartz to GitHub Pages
+name: Deploy Quartz v5 to GitHub Pages
 
 on:
   push:
@@ -15,9 +15,6 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,51 +24,71 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js (v22 for Quartz v5)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Clone Quartz v5 Engine
+        run: |
+          git clone --depth 1 https://github.com/jackyzha0/quartz.git quartz-engine
+          cd quartz-engine
+          npm ci
+
       - name: Prepare Content
         run: |
-          mkdir -p .site-content
+          mkdir -p quartz-engine/content
           if [ -f INDEX.md ]; then
-            cp INDEX.md .site-content/index.md
+            cp INDEX.md quartz-engine/content/index.md
           elif [ -f README.md ]; then
-            cp README.md .site-content/index.md
+            cp README.md quartz-engine/content/index.md
           fi
-          [ -f README.md ] && cp README.md .site-content/README.md
-          [ -f WORKFLOW.md ] && cp WORKFLOW.md .site-content/WORKFLOW.md
-          [ -d prompts ] && cp -r prompts .site-content/
-          [ -d playbooks ] && cp -r playbooks .site-content/
-          [ -d learnings ] && cp -r learnings .site-content/
+          [ -f README.md ] && cp README.md quartz-engine/content/README.md
+          [ -f WORKFLOW.md ] && cp WORKFLOW.md quartz-engine/content/WORKFLOW.md
+          [ -d prompts ] && cp -r prompts quartz-engine/content/
+          [ -d playbooks ] && cp -r playbooks quartz-engine/content/
+          [ -d learnings ] && cp -r learnings quartz-engine/content/
 
           # 1. 确保首页 index.md 具备完整 frontmatter
-          if ! head -n 1 .site-content/index.md | grep -q "^---"; then
-            printf -- "---\ntitle: 个人知识库总索引\n---\n\n" | cat - .site-content/index.md > .site-content/index.tmp && mv .site-content/index.tmp .site-content/index.md
+          if ! head -n 1 quartz-engine/content/index.md | grep -q "^---"; then
+            printf -- "---\ntitle: 个人知识库总索引\n---\n\n" | cat - quartz-engine/content/index.md > quartz-engine/content/index.tmp && mv quartz-engine/content/index.tmp quartz-engine/content/index.md
           fi
 
           # 2. 死链容错防御：扫描索引引用的所有文章，缺失时自动生成占位，防止编译崩溃
-          grep -oE '(playbooks|prompts)/[a-zA-Z0-9_-]+\.md' .site-content/index.md | sort -u | while read -r f; do
-            if [ ! -f ".site-content/$f" ]; then
-              mkdir -p "$(dirname ".site-content/$f")"
-              printf -- "---\ntitle: $(basename "$f" .md)\nstatus: draft\n---\n\n> 💡 本条目正在整理与同步中...\n" > ".site-content/$f"
+          grep -oE '(playbooks|prompts)/[a-zA-Z0-9_-]+\.md' quartz-engine/content/index.md | sort -u | while read -r f; do
+            if [ ! -f "quartz-engine/content/$f" ]; then
+              mkdir -p "$(dirname "quartz-engine/content/$f")"
+              printf -- "---\ntitle: $(basename "$f" .md)\nstatus: draft\n---\n\n> 💡 本条目正在整理与同步中...\n" > "quartz-engine/content/$f"
             fi
           done
+
+      - name: Configure and Build Quartz v5
+        run: |
+          cd quartz-engine
+          if [ -f "../.github/quartz/quartz.config.yaml" ]; then
+            cp ../.github/quartz/quartz.config.yaml ./quartz.config.yaml
+          else
+            cp quartz.config.default.yaml quartz.config.yaml
+          fi
+          # 确保全局参数精准注入
+          sed -i 's|baseUrl: .*|baseUrl: changelog.feyoudao.cn|g' quartz.config.yaml
+          sed -i 's|pageTitle: .*|pageTitle: 个人知识库 \| changelog|g' quartz.config.yaml
+          sed -i 's|locale: .*|locale: zh-CN|g' quartz.config.yaml
+
+          # 安装插件并构建
+          npx quartz plugin install --from-config || true
+          npx quartz build
+
+          # 生成自定义域名 CNAME
+          echo "changelog.feyoudao.cn" > public/CNAME
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Build Quartz Site
-        uses: konstfish/quartz-build-action@v7
-        with:
-          source: .site-content
-          quartz_repo_ref: v4
-          quartz_config: .github/quartz/quartz.config.ts
-          quartz_layout: .github/quartz/quartz.layout.ts
-
-      - name: Generate CNAME
-        run: echo "changelog.feyoudao.cn" > public/CNAME
-
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: quartz-engine/public
 
   deploy:
     environment:
