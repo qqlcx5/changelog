@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人知识库 | changelog</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --border: rgba(255, 255, 255, 0.1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      backdrop-filter: blur(12px);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--primary);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+    p {
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .status-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .status-item:last-child { margin-bottom: 0; }
+    .status-label { color: var(--text-muted); }
+    .status-val { font-weight: 500; color: #4ade80; }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+    }
+    .footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">● DNS & 部署链路连通测试</div>
+    <h1>个人知识库（changelog）</h1>
+    <p>恭喜！你的自定义域名解析与 GitHub Pages 静态发布链路已完全打通。</p>
+    
+    <div class="status-box">
+      <div class="status-item">
+        <span class="status-label">域名 (Domain)</span>
+        <span class="status-val">changelog.feyoudao.cn</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">部署托管</span>
+        <span class="status-val">GitHub Pages (Actions)</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">HTTPS 状态</span>
+        <span class="status-val">Active (SSL 加密生效)</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>仓库: qqlcx5/changelog</span>
+      <a href="https://github.com/qqlcx5/changelog" target="_blank">查看 GitHub 仓库 →</a>
+    </div>
+  </div>
+</body>
+</html>

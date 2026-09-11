@@ -1,4 +1,4 @@
-name: Deploy Quartz v5 to GitHub Pages
+name: Deploy Minimal Site to GitHub Pages
 
 on:
   push:
@@ -16,71 +16,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Node.js (v22 for Quartz v5)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Clone Quartz v5 Engine
+      - name: Prepare Minimal Site
         run: |
-          git clone --depth 1 https://github.com/jackyzha0/quartz.git quartz-engine
-          cd quartz-engine
-          npm ci
-
-      - name: Prepare Content
-        run: |
-          mkdir -p quartz-engine/content
-          if [ -f INDEX.md ]; then
-            cp INDEX.md quartz-engine/content/index.md
-          elif [ -f README.md ]; then
-            cp README.md quartz-engine/content/index.md
-          fi
-          [ -f README.md ] && cp README.md quartz-engine/content/README.md
-          [ -f WORKFLOW.md ] && cp WORKFLOW.md quartz-engine/content/WORKFLOW.md
-          [ -d prompts ] && cp -r prompts quartz-engine/content/
-          [ -d playbooks ] && cp -r playbooks quartz-engine/content/
-          [ -d learnings ] && cp -r learnings quartz-engine/content/
-
-          # 1. 确保首页 index.md 具备完整 frontmatter
-          if ! head -n 1 quartz-engine/content/index.md | grep -q "^---"; then
-            printf -- "---\ntitle: 个人知识库总索引\n---\n\n" | cat - quartz-engine/content/index.md > quartz-engine/content/index.tmp && mv quartz-engine/content/index.tmp quartz-engine/content/index.md
-          fi
-
-          # 2. 死链容错防御：扫描索引引用的所有文章，缺失时自动生成占位，防止编译崩溃
-          grep -oE '(playbooks|prompts)/[a-zA-Z0-9_-]+\.md' quartz-engine/content/index.md | sort -u | while read -r f; do
-            if [ ! -f "quartz-engine/content/$f" ]; then
-              mkdir -p "$(dirname "quartz-engine/content/$f")"
-              printf -- "---\ntitle: $(basename "$f" .md)\nstatus: draft\n---\n\n> 💡 本条目正在整理与同步中...\n" > "quartz-engine/content/$f"
-            fi
-          done
-
-      - name: Configure and Build Quartz v5
-        run: |
-          cd quartz-engine
-          if [ -f "../.github/quartz/quartz.config.yaml" ]; then
-            cp ../.github/quartz/quartz.config.yaml ./quartz.config.yaml
-          else
-            cp quartz.config.default.yaml quartz.config.yaml
-          fi
-          # 确保全局参数精准注入
-          sed -i 's|baseUrl: .*|baseUrl: changelog.feyoudao.cn|g' quartz.config.yaml
-          sed -i 's|pageTitle: .*|pageTitle: 个人知识库 \| changelog|g' quartz.config.yaml
-          sed -i 's|locale: .*|locale: zh-CN|g' quartz.config.yaml
-
-          # 安装插件并构建
-          npx quartz plugin install --from-config || true
-          npx quartz build
-
-          # 生成自定义域名 CNAME
+          mkdir -p public
+          # 拷贝测试首页与 CNAME
+          cp .github/site/index.html public/index.html
           echo "changelog.feyoudao.cn" > public/CNAME
+          # 打印目录结构以供核对
+          ls -la public/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -88,15 +37,8 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: quartz-engine/public
+          path: public
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
