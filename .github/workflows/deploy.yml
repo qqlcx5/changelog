@@ -52,7 +52,7 @@ jobs:
           quartz_layout: .github/quartz/quartz.layout.ts
 
       - name: Generate CNAME
-        run: echo "feyoudao.cn" > public/CNAME
+        run: echo "changelog.feyoudao.cn" > public/CNAME
 
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
