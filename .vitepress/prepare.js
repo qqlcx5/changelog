@@ -38,16 +38,14 @@ copyDir(path.join(repoRoot, "playbooks"), path.join(docsDir, "playbooks"));
 copyDir(path.join(repoRoot, "prompts"), path.join(docsDir, "prompts"));
 copyDir(path.join(repoRoot, "learnings"), path.join(docsDir, "learnings"));
 
-// 拷贝基础说明文件，并提供大小写别名兼容
+// 拷贝基础说明文件
 if (fs.existsSync(path.join(repoRoot, "README.md"))) {
   const readmeContent = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
   fs.writeFileSync(path.join(docsDir, "README.md"), readmeContent, "utf8");
-  fs.writeFileSync(path.join(docsDir, "readme.md"), readmeContent, "utf8");
 }
 if (fs.existsSync(path.join(repoRoot, "WORKFLOW.md"))) {
   const workflowContent = fs.readFileSync(path.join(repoRoot, "WORKFLOW.md"), "utf8");
   fs.writeFileSync(path.join(docsDir, "WORKFLOW.md"), workflowContent, "utf8");
-  fs.writeFileSync(path.join(docsDir, "workflow.md"), workflowContent, "utf8");
 }
 
 // 4. 解析 INDEX.md 并生成超链接
