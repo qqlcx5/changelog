@@ -41,6 +41,19 @@ jobs:
           [ -d playbooks ] && cp -r playbooks .site-content/
           [ -d learnings ] && cp -r learnings .site-content/
 
+          # 1. 确保首页 index.md 具备完整 frontmatter
+          if ! head -n 1 .site-content/index.md | grep -q "^---"; then
+            printf -- "---\ntitle: 个人知识库总索引\n---\n\n" | cat - .site-content/index.md > .site-content/index.tmp && mv .site-content/index.tmp .site-content/index.md
+          fi
+
+          # 2. 死链容错防御：扫描索引引用的所有文章，缺失时自动生成占位，防止编译崩溃
+          grep -oE '(playbooks|prompts)/[a-zA-Z0-9_-]+\.md' .site-content/index.md | sort -u | while read -r f; do
+            if [ ! -f ".site-content/$f" ]; then
+              mkdir -p "$(dirname ".site-content/$f")"
+              printf -- "---\ntitle: $(basename "$f" .md)\nstatus: draft\n---\n\n> 💡 本条目正在整理与同步中...\n" > ".site-content/$f"
+            fi
+          done
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
@@ -48,6 +61,7 @@ jobs:
         uses: konstfish/quartz-build-action@v7
         with:
           source: .site-content
+          quartz_repo_ref: v4
           quartz_config: .github/quartz/quartz.config.ts
           quartz_layout: .github/quartz/quartz.layout.ts
 
