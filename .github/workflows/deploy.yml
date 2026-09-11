@@ -18,40 +18,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Clone Quartz Engine
+      - name: Clone Quartz v4 Stable Engine
         run: |
-          git clone --depth 1 https://github.com/jackyzha0/quartz.git quartz-engine
+          git clone -b v4 --depth 1 https://github.com/jackyzha0/quartz.git quartz-engine
           cd quartz-engine
           npm ci
 
       - name: Prepare Content
         run: |
           mkdir -p quartz-engine/content
-          # 1. 拷贝主页并自动注入标准 frontmatter
-          if [ -f INDEX.md ]; then
-            cp INDEX.md quartz-engine/content/index.md
-          elif [ -f README.md ]; then
-            cp README.md quartz-engine/content/index.md
-          fi
-          if ! head -n 1 quartz-engine/content/index.md | grep -q "^---"; then
-            printf -- "---\ntitle: 个人知识库总索引\n---\n\n" | cat - quartz-engine/content/index.md > quartz-engine/content/index.tmp && mv quartz-engine/content/index.tmp quartz-engine/content/index.md
-          fi
+          
+          # 1. 拷贝并净化首页 index.md（注入标准 frontmatter 并剔除触发 AST 崩溃的 HTML 注释）
+          printf -- "---\ntitle: 个人知识库总索引\n---\n\n" > quartz-engine/content/index.md
+          sed -E '/<!--.*-->/d' INDEX.md >> quartz-engine/content/index.md
 
-          # 2. 拷贝说明与契约
+          # 2. 拷贝说明与各知识库目录
           [ -f README.md ] && cp README.md quartz-engine/content/README.md
           [ -f WORKFLOW.md ] && cp WORKFLOW.md quartz-engine/content/WORKFLOW.md
-
-          # 3. 拷贝知识库核心分类
           [ -d prompts ] && cp -r prompts quartz-engine/content/
           [ -d playbooks ] && cp -r playbooks quartz-engine/content/
           [ -d learnings ] && cp -r learnings quartz-engine/content/
 
-          # 4. 容错加固：扫描索引中的引用，如遇未提交或缺失文件自动补齐草稿占位，确保 AST 不崩
+          # 3. 死链防御兜底：扫描引用的所有 playbook/prompt，如缺失则自动生成占位
           grep -oE '(playbooks|prompts)/[a-zA-Z0-9_-]+\.md' quartz-engine/content/index.md | sort -u | while read -r f; do
             if [ ! -f "quartz-engine/content/$f" ]; then
               mkdir -p "$(dirname "quartz-engine/content/$f")"
@@ -61,20 +54,15 @@ jobs:
 
       - name: Configure and Build Quartz
         run: |
-          cd quartz-engine
-          if [ -f "../.github/quartz/quartz.config.yaml" ]; then
-            cp ../.github/quartz/quartz.config.yaml ./quartz.config.yaml
-          else
-            cp quartz.config.default.yaml quartz.config.yaml
+          # 覆盖配置
+          if [ -f ".github/quartz/quartz.config.ts" ]; then
+            cp .github/quartz/quartz.config.ts quartz-engine/quartz.config.ts
+          fi
+          if [ -f ".github/quartz/quartz.layout.ts" ]; then
+            cp .github/quartz/quartz.layout.ts quartz-engine/quartz.layout.ts
           fi
 
-          # 注入站点关键元数据
-          sed -i 's|baseUrl: .*|baseUrl: changelog.feyoudao.cn|g' quartz.config.yaml
-          sed -i 's|pageTitle: .*|pageTitle: 个人知识库 \| changelog|g' quartz.config.yaml
-          sed -i 's|locale: .*|locale: zh-CN|g' quartz.config.yaml
-
-          # 安装依赖插件并构建
-          npx quartz plugin install --from-config || true
+          cd quartz-engine
           npx quartz build
 
           # 生成自定义域名 CNAME
