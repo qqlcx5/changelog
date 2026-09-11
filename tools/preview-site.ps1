@@ -1,79 +1,52 @@
 <#
 .SYNOPSIS
-    在本地临时环境预览 Quartz v5 知识库站点（零污染主仓库）
-.DESCRIPTION
-    将 Quartz v5 官方引擎拉取到系统临时目录，挂载并同步当前内容后启动预览服务
+    在本地预览基于 VitePress & Teek 主题的知识库站点
 #>
 param (
-    [switch]$UpdateEngine
+    [switch]$Install
 )
 
 $ErrorActionPreference = "Stop"
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "       Quartz v5 本地预览启动器          " -ForegroundColor Cyan
+Write-Host "     VitePress + Teek 本地预览启动器    " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-$tempDir = Join-Path $env:TEMP "quartz-preview-changelog-v5"
 $repoRoot = (Resolve-Path "$PSScriptRoot\..").Path
+$tempDir = Join-Path $env:TEMP "teek-preview"
+$docsDir = Join-Path $tempDir "docs"
 
-# 1. 检查或准备 Quartz v5 运行环境
-if (-not (Test-Path $tempDir) -or $UpdateEngine) {
-    if (Test-Path $tempDir) {
-        Write-Host "清理旧环境..." -ForegroundColor Yellow
-        Remove-Item -Recurse -Force $tempDir
-    }
-    Write-Host "首次运行：正在拉取 Quartz v5 官方引擎到临时目录..." -ForegroundColor Yellow
-    Write-Host "路径: $tempDir" -ForegroundColor DarkGray
-    git clone --depth 1 https://github.com/jackyzha0/quartz.git $tempDir
+# 1. 初始化临时运行环境
+if (-not (Test-Path "$tempDir\node_modules") -or $Install) {
+    if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
+    New-Item -ItemType Directory -Path $tempDir | Out-Null
+    Copy-Item "$repoRoot\package.json" "$tempDir\package.json"
     Push-Location $tempDir
-    Write-Host "正在安装基础依赖..." -ForegroundColor Yellow
-    npm ci
+    Write-Host "正在安装 VitePress 与 Teek 主题依赖..." -ForegroundColor Yellow
+    npm install
     Pop-Location
 }
 
-# 2. 准备内容目录 content
-$contentDir = Join-Path $tempDir "content"
-if (Test-Path $contentDir) {
-    Remove-Item -Recurse -Force $contentDir
-}
-New-Item -ItemType Directory -Path $contentDir | Out-Null
+# 2. 同步内容与配置
+if (Test-Path $docsDir) { Remove-Item -Recurse -Force $docsDir }
+New-Item -ItemType Directory -Path $docsDir | Out-Null
 
-Write-Host "正在同步知识库内容..." -ForegroundColor Cyan
+Copy-Item -Recurse "$repoRoot\.vitepress" "$docsDir\.vitepress"
+Copy-Item "$repoRoot\README.md" "$docsDir\README.md"
+Copy-Item "$repoRoot\WORKFLOW.md" "$docsDir\WORKFLOW.md"
+Copy-Item -Recurse "$repoRoot\prompts" "$docsDir\prompts"
+Copy-Item -Recurse "$repoRoot\playbooks" "$docsDir\playbooks"
+Copy-Item -Recurse "$repoRoot\learnings" "$docsDir\learnings"
+
+# 首页 index.md
 if (Test-Path "$repoRoot\INDEX.md") {
-    Copy-Item "$repoRoot\INDEX.md" "$contentDir\index.md"
-} elseif (Test-Path "$repoRoot\README.md") {
-    Copy-Item "$repoRoot\README.md" "$contentDir\index.md"
+    $c = Get-Content "$repoRoot\INDEX.md" -Raw
+    Set-Content "$docsDir\index.md" -Value ("---`nlayout: doc`ntitle: 个人知识库总索引`n---`n`n" + $c) -Encoding utf8
 }
 
-if (Test-Path "$repoRoot\README.md") { Copy-Item "$repoRoot\README.md" "$contentDir\README.md" }
-if (Test-Path "$repoRoot\WORKFLOW.md") { Copy-Item "$repoRoot\WORKFLOW.md" "$contentDir\WORKFLOW.md" }
-
-if (Test-Path "$repoRoot\prompts") { Copy-Item -Recurse "$repoRoot\prompts" "$contentDir\prompts" }
-if (Test-Path "$repoRoot\playbooks") { Copy-Item -Recurse "$repoRoot\playbooks" "$contentDir\playbooks" }
-if (Test-Path "$repoRoot\learnings") { Copy-Item -Recurse "$repoRoot\learnings" "$contentDir\learnings" }
-
-# 确保 index.md 具有 frontmatter
-$indexPath = "$contentDir\index.md"
-$firstLine = Get-Content $indexPath -First 1
-if ($firstLine -notmatch "^---") {
-    $existing = Get-Content $indexPath -Raw
-    Set-Content -Path $indexPath -Value ("---`ntitle: 个人知识库总索引`n---`n`n" + $existing) -Encoding utf8
-}
-
-# 3. 覆盖自定义配置
-if (Test-Path "$repoRoot\.github\quartz\quartz.config.yaml") {
-    Copy-Item "$repoRoot\.github\quartz\quartz.config.yaml" "$tempDir\quartz.config.yaml" -Force
-} else {
-    Copy-Item "$tempDir\quartz.config.default.yaml" "$tempDir\quartz.config.yaml" -Force
-}
-
-# 4. 安装插件并启动服务
-Write-Host "正在准备插件并启动本地服务..." -ForegroundColor Green
-Write-Host "预览地址: http://localhost:8080" -ForegroundColor Green
+Write-Host "启动本地热重载开发服务 (http://localhost:5173)..." -ForegroundColor Green
 Push-Location $tempDir
 try {
-    npx quartz plugin install --from-config
-    npx quartz build --serve
+    npx vitepress dev docs
 } finally {
     Pop-Location
 }
