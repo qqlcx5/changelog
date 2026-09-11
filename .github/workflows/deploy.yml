@@ -27,46 +27,7 @@ jobs:
         run: npm install
 
       - name: Prepare Content
-        run: |
-          mkdir -p docs
-          cp -r .vitepress docs/
-
-          # 1. 首页索引注入
-          if [ -f INDEX.md ]; then
-            printf -- "---\nlayout: doc\ntitle: 个人知识库总索引\n---\n\n" > docs/index.md
-            cat INDEX.md >> docs/index.md
-          elif [ -f README.md ]; then
-            cp README.md docs/index.md
-          fi
-
-          # 2. 拷贝核心知识分类与说明
-          [ -f README.md ] && cp README.md docs/README.md
-          [ -f WORKFLOW.md ] && cp WORKFLOW.md docs/WORKFLOW.md
-          [ -d prompts ] && cp -r prompts docs/
-          [ -d playbooks ] && cp -r playbooks docs/
-          [ -d learnings ] && cp -r learnings docs/
-
-          # 3. 预处理 Markdown 中偶现的裸尖括号（防止 Vue 模板解析冲突）
-          node -e '
-          const fs = require("fs");
-          const path = require("path");
-          function walk(dir) {
-            for (const item of fs.readdirSync(dir)) {
-              const full = path.join(dir, item);
-              if (fs.statSync(full).isDirectory()) {
-                if (item !== ".vitepress" && item !== "node_modules") walk(full);
-              } else if (full.endsWith(".md")) {
-                let content = fs.readFileSync(full, "utf8");
-                content = content.replace(/<0\.16/g, "&lt;0.16")
-                                 .replace(/< 2\.29/g, "&lt; 2.29")
-                                 .replace(/<platform>/g, "&lt;platform&gt;")
-                                 .replace(/<arch>/g, "&lt;arch&gt;");
-                fs.writeFileSync(full, content, "utf8");
-              }
-            }
-          }
-          walk("docs");
-          '
+        run: node .vitepress/prepare.js
 
       - name: Build with VitePress & Teek
         run: |

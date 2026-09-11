@@ -43,6 +43,7 @@ export default defineConfig({
       {
         text: "复盘认知",
         items: [
+          { text: "认知概览", link: "/learnings/" },
           { text: "踩坑记录 (Errors)", link: "/learnings/ERRORS" },
           { text: "单点认知 (Learnings)", link: "/learnings/LEARNINGS" },
           { text: "功能诉求 (Feature Requests)", link: "/learnings/FEATURE_REQUESTS" },
