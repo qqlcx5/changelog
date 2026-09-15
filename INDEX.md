@@ -38,14 +38,17 @@
 | PB-20260903-002 | Element Plus el-descriptions 标签列统一对齐三件套 | verified | element-plus,vue3,css,layout | 2026-09-03 | playbooks/element-plus-descriptions-label-alignment.md |
 | PB-20260904-001 | 钉钉 H5 微应用官方工具链导航（ding CLI / dingtalk-jsapi / dingtalk-mcp） | draft | dingtalk,cli,mcp,jsapi | 2026-09-04 | playbooks/dingtalk-official-dev-toolchain.md |
 | PB-20260904-002 | Vite + pnpm 项目上 CI 流水线的构建脚本排障清单 | draft | ci,pnpm,vite,build-pipeline | 2026-09-04 | playbooks/vite-pnpm-ci-build-pipeline.md |
-| PB-20260907-001 | AI 网关选型对比——CLIProxyAPI vs New API vs Sub2API（含服务器开销） | draft | ai-gateway,cliproxyapi,new-api,sub2api | 2026-09-07 | playbooks/ai-gateway-selection-comparison.md |
-| PB-20260907-002 | New API 用量与 token 统计落地配置（看板 / 倍率 / 查询 API / 长期留存） | draft | new-api,token-stats,billing,ai-gateway | 2026-09-07 | playbooks/new-api-token-usage-stats.md |
 | PB-20260904-003 | 大模型 API 对公结算选型清单（2026-09） | draft | llm,api-relay,enterprise-billing,fapiao | 2026-09-04 | playbooks/llm-api-enterprise-billing.md |
 | PB-20260904-004 | Spring Boot 3 + MyBatis-Plus Service 纯 Mockito 单测方案（静态依赖注入 / lambda 列缓存 / surefire 硬编码跳测） | verified | springboot3,mybatis-plus,unit-test,mockito | 2026-09-04 | playbooks/springboot3-mybatis-plus-pure-unit-test.md |
-| PB-20260908-003 | 用 Dockge 部署 Sub2API（compose.yaml + 环境变量 + 坑点） | draft | sub2api,dockge,docker-compose,selfhosted | 2026-09-08 | playbooks/sub2api-dockge-deploy.md |
+| PB-20260907-001 | AI 网关选型对比——CLIProxyAPI vs New API vs Sub2API（含服务器开销） | draft | ai-gateway,cliproxyapi,new-api,sub2api | 2026-09-07 | playbooks/ai-gateway-selection-comparison.md |
+| PB-20260907-002 | New API 用量与 token 统计落地配置（看板 / 倍率 / 查询 API / 长期留存） | draft | new-api,token-stats,billing,ai-gateway | 2026-09-07 | playbooks/new-api-token-usage-stats.md |
 | PB-20260908-001 | Dockge 部署（Docker Compose 管理面板）标准步骤 | draft | docker,dockge,compose,self-host | 2026-09-08 | playbooks/dockge-deploy.md |
 | PB-20260908-002 | Antigravity 免 TUN 模式代理（Windows DLL 注入 + macOS 扩展） | draft | antigravity,proxy,no-tun,windows | 2026-09-08 | playbooks/antigravity-proxy-without-tun.md |
+| PB-20260908-003 | 用 Dockge 部署 Sub2API（compose.yaml + 环境变量 + 坑点） | draft | sub2api,dockge,docker-compose,selfhosted | 2026-09-08 | playbooks/sub2api-dockge-deploy.md |
 | PB-20260910-001 | Windows 上 git pull/push 因文件名含非法字符（`<` `>`）失败的绕过与恢复 | verified | git,windows,filename,recovery | 2026-09-10 | playbooks/git-windows-illegal-filename.md |
+| PB-20260914-001 | pnpm 在项目目录报「拒绝访问」——packageManager 版本切换失败的定位与修复 | verified | pnpm,windows,access-denied,package-manager | 2026-09-14 | playbooks/pnpm-access-denied-package-manager-switch.md |
+| PB-20260915-001 | 大型前端/扩展项目代码简化与重构实战手册（TypeScript + Vue3 / Pinia + WXT） | verified | refactor,code-simplification,typescript,pinia | 2026-09-15 | playbooks/frontend-codebase-simplification-refactor.md |
+| PB-20260915-002 | Pinia 巨型 Store 提取 Headless Engine 架构深化实操 | verified | vue3,pinia,architecture,refactor | 2026-09-15 | playbooks/pinia-store-headless-engine-refactor.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
@@ -55,5 +58,5 @@
 |---|---|---|---|
 | errors | learnings/ERRORS.md | 35 | 2026-09-09 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
-| learnings | learnings/LEARNINGS.md | 8 | 2026-09-07 |
+| learnings | learnings/LEARNINGS.md | 9 | 2026-09-15 |
 <!-- END:learnings -->

@@ -192,3 +192,26 @@ PRD→代码一致性审查中，最隐蔽的缺口不是「规格没写」也�
 
 ### Resolution
 2026-09-07：QCM V2 feat-012 按此顺序核查，`LogInterceptor` 的 `statusFlag` 改为按响应判定（平台异常响应 `code != 0000` 记失败，第三方原始报文无 `code` 记成功），与统计接口同批交付。
+
+---
+
+## [LRN-20260915-001] Pinia Setup Store 局部变量遮蔽 (Variable Shadowing) 顶层 Computed 导致状态引用失真
+
+**Logged**: 2026-09-15T14:15:00 | **Status**: resolved | **Tags**: pinia, vue3, shadowing, refactor
+**See Also**: PB-20260915-001
+
+### Summary
+在 Pinia Setup Store 函数内部，局部临时累加变量（如 `let totalCollected = 0`）与顶层 computed（`const totalCollected = computed(...)`）同名时，TypeScript 不会产生编译错误，但会导致函数作用域内的同名引用全部被局部变量捕获，造成后续方法拆分或调用时状态引用失真。
+
+### Details
+- 场景：在 `feed.store.ts` 中，顶层定义并导出了全局计算属性 `const totalCollected = computed(() => Object.values(feedItemStats.value).reduce(...))`，用于给全局状态面板汇总全订阅源已收集文章总数；而在 `collectAllPending()` 函数内部，作者为了统计本次批量收集的结果又声明了 `let totalCollected = 0`；
+- 隐蔽性：由于 JavaScript 词法作用域规则，函数体内的所有 `totalCollected` 都会静默绑定到局部 `let`，不报错、不报警；若开发人员或重构工具尝试在函数内读取顶层计算属性，或向外提取闭包，极易发生意外取到局部临时值（或误将其赋值给其他全局配置）；
+- 排除与审查方法：对于 Setup Store，在代码静态审查时需检查导出名与函数内部 `let` / `const` 的命名重叠；特别注意统计类字段（如 `total*`、`count*`、`status*` 等通用词汇）。
+
+### Suggested Action
+1. Pinia Setup Store 内部方法中的临时变量、批处理计数器与累加器一律使用明确的场景前缀（如 `batchCollected`、`stepTotal`、`localCount`），禁止直接使用与顶层 State / Getters 相同的标识符；
+2. 在代码审查和重构清单中，将「同名变量遮蔽」列为 High 优先级潜在 Bug 检查项；
+3. 将局部变量更名后通过类型检查与单元测试验证无遗漏。
+
+### Resolution
+2026-09-15：在 ReadChat Clipper 的 `stores/feed.store.ts` 中将 `collectAllPending` 内部的 `totalCollected` 重命名为 `batchCollected`，消除变量名遮蔽风险；`vue-tsc --noEmit` 0 错误，单元测试通过。
