@@ -49,6 +49,7 @@
 | PB-20260914-001 | pnpm 在项目目录报「拒绝访问」——packageManager 版本切换失败的定位与修复 | verified | pnpm,windows,access-denied,package-manager | 2026-09-14 | playbooks/pnpm-access-denied-package-manager-switch.md |
 | PB-20260915-001 | 大型前端/扩展项目代码简化与重构实战手册（TypeScript + Vue3 / Pinia + WXT） | verified | refactor,code-simplification,typescript,pinia | 2026-09-15 | playbooks/frontend-codebase-simplification-refactor.md |
 | PB-20260915-002 | Pinia 巨型 Store 提取 Headless Engine 架构深化实操 | verified | vue3,pinia,architecture,refactor | 2026-09-15 | playbooks/pinia-store-headless-engine-refactor.md |
+| PB-20260915-003 | Git 子模块做成「替身」——用目录联接指向本地已有克隆，让 AI 助手读得到代码 | verified | git,submodule,junction,ai-agent | 2026-09-15 | playbooks/submodule-local-clone-junction.md |
 <!-- END:playbooks -->
 
 ## learnings（分轨统计，条目追加在各轨道文件内）
