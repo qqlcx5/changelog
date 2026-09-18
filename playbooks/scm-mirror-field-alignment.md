@@ -6,7 +6,7 @@ tags: [qcm-v2, protable, field-mapping, jackson]
 status: verified
 source: conversation:2026-08-25
 created: 2026-08-25
-updated: 2026-09-03
+updated: 2026-09-18
 ---
 
 # QCM V2 镜像页字段口径对齐清单（SCM & MDP / jp-ui + 后端契约）
@@ -145,26 +145,46 @@ MDP 镜像实体（如 `Product`）业务字段**无** `@JsonProperty`，响应 
 6. **详情页全量字典翻译（2026-09-03 四次增补）**：列表有的详情也要——详情页 87 字段按**实体注释为权威**全量配码：注释标「字典 XXX」的配 `mdpDictType`（41 个分类走 mdpDictUtils，onMounted `await loadMdpDicts([...])` 后再请求详情，清单为列表页的全量超集，模块缓存跨页面复用不重复请求）、标「Y/N」的配 `dictType: "commonYN"`（13 个，读登录缓存无需预加载）。两个实现细节：renderField 先判空（`raw == null || raw === ""` → "-"）再分流——getMdpDictLabel 对空值返回空串，不先判空会绕过 "-" 占位符；el-descriptions 是响应式渲染（vxe formatter 非响应式的坑在此不适用），但保持「先 await 字典再请求数据」的列表页同构范式，首屏不闪原码。用户原话「列表不是有说明，列表有的详情也要请求」——镜像页详情与列表的字典口径必须一致，否则验收必返工。
 7. **字典加载与列表请求并行化（2026-09-03 五次增补，用户定型替换串行范式）**：用户原话「列要计算属性，等接口返回相关字段再回显，而不是等待接口全部请求，以后这样的都得这样改」——旧范式「onMounted 中 await loadMdpDicts([...]) 后再 refresh()」让首屏串行等待全部字典接口，被否决。新范式（列表页 vxe）：onMounted 中 `refresh()` 立即发出列表请求 + `loadMdpDicts([...])` 并行（不 await）；字典就绪后 `.then()` 里 `const vxe = proTableRef.value?.tableRef; const rows = vxe?.getTableData()?.fullData || []; if (rows.length) vxe.reloadData(rows);`——**同数据重载**触发 vxe formatter 缓存重建（getCellLabel 按 rowid+colid 缓存、仅数据重载才重算），不重发请求、不改分页；若列表晚于字典返回，数据到达时 formatter 直接命中缓存（无竞态）。副作用：reloadData 重置勾选状态（低概率交互窗口，可接受）。详情页（el-descriptions 响应式渲染）更简单：字典与详情请求直接并行不 await，renderField 读 reactive 缓存依赖自动追踪，字典后到自动重渲——无需 reloadData（vxe 缓存机制仅适用表格）。defineExpose 暴露的 ref 经模板引用访问自动解包（`proTableRef.value?.tableRef?.` 直调 vxe 方法已有 6 页先例）。已同步修订 harness §8.1.2。
 
-## 10. 契约数据版本滞后：pageSchema 返回旧列集——先指纹定位滞后层再修（2026-09-03 增补�?
+## 10. 契约数据版本滞后：pageSchema 返回旧列集——先指纹定位滞后层再修（2026-09-03 增补）
 
-> 来源：商品主数据扩列�?86 列后实战——磁盘上的新 DML 未落库，/sys/pageSchema 仍只返回旧版 24 列，误以为接口少数据�?
+> 来源：商品主数据扩列至 86 列后实战——磁盘上的新 DML 未落库，/sys/pageSchema 仍只返回旧版 24 列，误以为接口少数据。
 
-**机制**：pageSchema 返回�?�?建模登记全量列，而是三层交集�?
+**机制**：pageSchema 返回的不是建模登记全量列，而是三层交集：
 
-`sys_menu_form_column.visible_columns`（Redis Hash `sys:cache:menuForm:{tenantId}::menuForm`，field=menuCode，懒加载，直改库不失效）�?`sys_model_table_column` 实时列（FormColumnParser�? 分钟本地缓存）− 角色黑名单（admin 跳过）；id 不在绑定数组时补位首位�?
+`sys_menu_form_column.visible_columns`（Redis Hash `sys:cache:menuForm:{tenantId}::menuForm`，field=menuCode，懒加载，直改库不失效）∩ `sys_model_table_column` 实时列（FormColumnParser 5 分钟本地缓存）− 角色黑名单（admin 跳过）；id 不在绑定数组时补位首位。
 
-**判定特征（先定位滞后层，不要先怀疑代码）**：返回列集与某个历史版本 DML �?visible_columns 数组**逐位一�?* + id 在首位（补位特征）→ 运行库停留在该版本。本例返�?24 �?= 08-27 �?23 列绑�?+ id 补位，缺 zsyear�?9-01 才加）、缺 subseries 等（09-03 才加），版本指纹直接指向 08-27 版数据�?
+**判定特征（先定位滞后层，不要先怀疑代码）**：返回列集与某个历史版本 DML 的 visible_columns 数组**逐位一致** + id 在首位（补位特征）→ 运行库停留在该版本。本例返回 24 列 = 08-27 版 23 列绑定 + id 补位，缺 zsyear（09-01 才加）、缺 subseries 等（09-03 才加），版本指纹直接指向 08-27 版数据。
 
-**修复序（任一层滞后都单独足以致旧�?*�?
+**修复顺序（任一层滞后都单独足以致旧）**：
 
-1. �?*后端实际连接的库**重跑最新幂�?DML（自�?DELETE 清理）；
-2. SQL 指纹核验：`SELECT JSON_LENGTH(visible_columns) FROM sys_menu_form_column WHERE menu_code='xxx' AND del_flag=0;`（应=绑定列数�? `SELECT COUNT(*) FROM sys_model_table_column c JOIN sys_model_table t ON t.id=c.table_id WHERE t.form_code='xxx' AND c.del_flag=0 AND t.del_flag=0;`（应=元数据行数）�?
-3. 清绑定缓存：`HDEL sys:cache:menuForm:{tenantId}::menuForm {menuCode}`（或 DEL �?key）；
+1. **后端实际连接的库**重跑最新幂等 DML（自带 DELETE 清理）；
+2. SQL 指纹核验：`SELECT JSON_LENGTH(visible_columns) FROM sys_menu_form_column WHERE menu_code='xxx' AND del_flag=0;`（应=绑定列数）；`SELECT COUNT(*) FROM sys_model_table_column c JOIN sys_model_table t ON t.id=c.table_id WHERE t.form_code='xxx' AND c.del_flag=0 AND t.del_flag=0;`（应=元数据行数）；
+3. 清绑定缓存：`HDEL sys:cache:menuForm:{tenantId}::menuForm {menuCode}`（或 DEL 对应 key）；
 4. 列元数据 5 分钟本地缓存等过期，或重启后端立即生效；
-5. 重新 curl /sys/pageSchema，核对列数与顺序�?
+5. 重新 curl /sys/pageSchema，核对列数与顺序。
 
-**教训**：磁盘上�?DML 文件 �?库里的数据；直改�?�?缓存失效。契约类接口的返回面是「绑定白名单 × 实时�?× 双层缓存」的交集，任何一层滞后都表现为「少数据」�?
+**教训**：磁盘上的 DML 文件 ≠ 库里的数据；直改库 ≠ 缓存失效。契约类接口的返回面是「绑定白名单 × 实时列 × 双层缓存」的交集，任何一层滞后都表现为「少数据」。
 
 ---
 
 8. **computed columns 终版：列配置本身就是响应式的「计算属性」（2026-09-03 六次增补，同日三代方案收敛）**：用户追问「column 不能写计算属性？返回哪些字段就回显」——正确，且比 reloadData 更干净。vxe 4.20 源码实证：getCellLabel 缓存挂 rowRest.formatData[colid]、命中条件仅 `value === cellValue`，**formatter 引用更新不失效缓存**（watchColumn 对 formatter prop 变化只走 column.update，不触发刷新队列），故单纯 computed columns 也不会自动重算——缺的最后一块是 vxe 官方实例方法 **clearFormatterCache(true)**（清全部 label 缓存并立即重算，内部从未自调）。终版形态：页面 columns 写成 `computed<Column[]>`（getter 内 forEach 真实读取 getMdpDictList 的 reactive cache 建立依赖，字典清单提为 MDP_DICT_CODES 常量与 loadMdpDicts 共用单一来源）+ ProTable 内建 `watch(finalColumns, () => nextTick(() => tableRef.value?.clearFormatterCache?.(true)))`。链路：字典后到 → cache 变化 → columns 重算 → ProTable 清缓存重算回显；切语言同链路自动覆盖（cacheKey 带语言后缀 + td 标签也在 computed 内）。对比 reloadData 优势：不动数据/勾选/分页（clearFormatterCache 只重算显示）；页面无需持有 vxe 引用。静态列页面 watch 永不触发零开销，通用能力内建组件安全。
+
+
+## 11. 筛选契约形态决定搜索行为：字典列必须 DICT+EQ，TEXT+LIKE 必空（2026-09-18 增补）
+
+> 来源：镜像页三个「明明有数据」的下拉筛选项（品类/品牌/开发类型）查询结果全空的实战。
+
+**机制**：契约模式下搜索区渲染完全由建模列 dataType + 查询配置 compareType 驱动，前端列上的 select/字典 options 配置**被契约覆盖、不回退**。若某列前端用字典 formatter 显示中文 label（库里存代码值），而契约登记为 TEXT+LIKE → 搜索区渲染成**文本输入框** → 用户输入屏幕上看到的中文 → LIKE 去匹配库内代码值 → 必然为空。本质是「显示层翻译了、搜索层没翻译」的形态错位：**所见非所搜**。
+
+**排查序（先排数据、再排契约形态）**：
+1. GROUP BY 库内实际值域 vs 字典 value 逐项比对——本例完全匹配，排除值域错配（区别于第 9 节 IN/options 问题）；
+2. 查契约 dataType/compareType——发现字典列被登记成 TEXT+LIKE，搜索区形态错误即根因；
+3. 用接口直发 conditions（columnCode+compareType=EQ+value=库内代码）验证后端命中，切割前后端责任。
+
+**修复**：契约列 DICT 化（data_type=DICT + ref_code=字典 type）、查询配置 LIKE→EQ；前端 queryToField 按 DICT 自动渲染字典下拉、提交 value 精确匹配。**源头 DML 脚本必须同步改**，否则重跑即回退（第 10 节契约回退陷阱的又一入口）。
+
+**配套技巧一：字典缓存直补（后端接口不可用时）**。字典 Redis 缓存为 Jackson typed 序列化双层结构：`["java.util.ArrayList", [ {...条目} ]]`，条目带 `@class` DTO 全限定名、日期字段包成 `["java.util.Date", "yyyy-MM-dd HH:mm:ss"]`、数值字段可能是字符串（如 sort）。当刷新缓存接口因 token 过期不可用时，可仿现有条目结构、从库读真实记录逐字段构造后 HSET 直补——立即生效，且因库内已落数据，后端下次全量重建结果一致，无漂移风险。改前先 HGET 一条现有值打印结构，禁止凭想象构造。
+
+**配套技巧二：上游文档缺失值反推**。库内出现接口文档未覆盖的代码值时（GROUP BY 值域比对发现字典缺项），用关联列特征反推语义（如该代码值下所有行的中类名称集中于某一族 → 以此命名 label），字典补齐并在脚本注释标注「按库内数据推断，待上游确认」；不补则该值既无法翻译也无法被下拉筛选命中。
+
+**教训**：给列加字典 formatter（显示翻译）时必须同步检查契约 dataType——显示与搜索是两条独立配置链，只改一边就产生「列表显示中文、搜索输入中文却查不到」的割裂体验，且表象（查询为空）与根因（契约形态）相距甚远。
