@@ -57,7 +57,7 @@
 <!-- BEGIN:learnings -->
 | track | file | entries | updated |
 |---|---|---|---|
-| errors | learnings/ERRORS.md | 35 | 2026-09-09 |
+| errors | learnings/ERRORS.md | 36 | 2026-09-18 |
 | feature-requests | learnings/FEATURE_REQUESTS.md | 0 | 2026-08-25 |
 | learnings | learnings/LEARNINGS.md | 9 | 2026-09-15 |
 <!-- END:learnings -->

@@ -385,33 +385,33 @@ See Also: PB-20260825-001
 
 ---
 
-## [ERR-20260831-009] pageSchema 濂戠害"涓嶇敓鏁?锛氱粦瀹氳〃 tenant_id 鍐欓敊绉熸埛锛屾煡璇㈡案涓嶅懡涓?
+## [ERR-20260831-009] pageSchema 契约不生效：绑定表 tenant_id 写错租户，查询永不命中
 
 **Logged**: 2026-08-31 | **Status**: resolved | **Tags**: qcm-v2, pageschema, multi-tenant, dml
 
 ### Summary
 
-琛ㄥ崟寤烘ā DML 鍏ㄩ儴鎵ц鎴愬姛锛岄〉闈㈠嵈濮嬬粓璧板洖閫€閫昏緫锛堝绾︽湭鐢熸晥锛夈€傛牴鍥狅細`sys_menu_form_column.tenant_id` 鍐欐垚浜?`'10002'`锛岃€岃繍琛屾湡 `getMenuFormCache` 鎸?`menu_code + 褰撳墠鐧诲綍鐢ㄦ埛绉熸埛` 绮剧‘鏌ヨ锛宎dmin 绉熸埛鏄?`'10000'`锛岀粦瀹氭案杩滄煡涓嶅埌 鈫?`restricted=false` 鈫?鍓嶇璧板師閫昏緫銆?
+表单建模 DML 全部执行成功，页面却始终走回退逻辑（契约未生效）。根因：`sys_menu_form_column.tenant_id` 写成了 `'10002'`，而运行期 `getMenuFormCache` 按 `menu_code + 当前登录用户租户` 精确查询，admin 租户是 `'10000'`，绑定永远查不到 → `restricted=false` → 前端走原逻辑。
 
 ### Details
 
-- 鍦烘櫙锛歈CM V2 md 妯″潡 7 椤垫帴鍏?pageSchema 濂戠害锛坄usePageSchema` + `/sys/pageSchema`锛夛紝閰嶅 9 浠借〃鍗曟ā鍨?DML锛坰ys_model_table / sys_model_table_column / sys_model_table_column_query / sys_menu_form_column锛夊叏閮ㄦ墽琛岋紝椤甸潰鏃犱换浣曞彉鍖栵紱
-- 鍒ゅ畾閾撅細鍓嶇 `usePageSchema` 鈫?`GET /sys/pageSchema?menuCode=xxx` 鈫?`PageSchemaAssembler.assemble` 鈫?`FormColumnPermissionCalculator.calculate` 鈫?`SysMenuFormColumnService.getMenuFormCache`锛氬厛鏌?Redis Hash `sys:cache:menuForm:{tenantId}::menuForm`锛坒ield=menuCode锛夛紝miss 鍐嶆煡 `sys_menu_form_column WHERE menu_code=? AND tenant_id=CacheTenantUtils.getTenantId()`锛涙煡涓嶅埌鍗宠繑鍥炵┖ 鈫?`restricted=false`锛?
-- 鏍瑰洜锛歵enant_id 鍐欏叆 `'10002'`锛堝綋鏃惰鍒ら粯璁ょ鎴凤紝瀹為檯鏄剼鎵嬫灦 SQL 閲屾棤閿″垎鍏徃鏃х鎴风殑娈嬬暀鍊硷級锛涜€?admin 鐢ㄦ埛锛坰ys_user.id='1'锛塼enant_id='10000'锛宍DEFAULT_TENANT_ID="10000"`锛宻ys_tenant 鍏ㄩ儴璁板綍 tenant_id 鍒椾篃鏄?'10000'锛?
-- 闅愯棌鎬ф潵婧愶細鈶?澶氱鎴锋彃浠?IGNORE_TABLES 宸插拷鐣?`sys_menu_form_column`锛屼笉浼氳鑷姩鎷肩鎴锋潯浠讹紝绉熸埛鍖归厤瀹屽叏闈犳墜鍐?`.eq(tenantId)`锛岄厤缃敊鍊兼棤浠讳綍鎶ラ敊锛涒憽 DML 鎵ц鎴愬姛銆佽彍鍗曞瓨鍦ㄣ€佸缓妯″垪榻愬叏锛屾墍鏈夐潤鎬佹鏌ラ兘缁跨伅锛涒憿 "鏈粦瀹?鏄璁′笂鐨勬甯稿洖閫€锛堝墠绔?console.error 涓€琛岀孩瀛楋級锛屼笉鎶ラ敊锛?
-- 浜ゅ弶楠岃瘉鏂规硶锛欶12 鎺у埗鍙扮湅 `[ProTable][pageSchema] 鎺ュ彛鍘熷杩斿洖` 鐨?`restricted` 涓?`formsCount`鈥斺€攆alse/0 鍗崇粦瀹氭湭鍛戒腑锛?
-- 闄勫甫鍙戠幇锛氱洿鎺ユ墽琛?SQL 涓嶈蛋鍚庣 saveBinds锛屼笉浼氳Е鍙?`evictByMenuCode` 娓呯紦瀛橈紱鑻ヤ箣鍓嶆浘鍛戒腑杩囩粦瀹氾紝Redis 閲屾湁鏃у€硷紝鏀瑰簱鍚庡繀椤绘竻缂撳瓨鎵嶇敓鏁堛€?
+- 场景：QCM V2 md 模块 7 页接入 pageSchema 契约（`usePageSchema` + `/sys/pageSchema`），配套 9 份表单模型 DML（sys_model_table / sys_model_table_column / sys_model_table_column_query / sys_menu_form_column）全部执行，页面无任何变化；
+- 判定链：前端 `usePageSchema` → `GET /sys/pageSchema?menuCode=xxx` → `PageSchemaAssembler.assemble` → `FormColumnPermissionCalculator.calculate` → `SysMenuFormColumnService.getMenuFormCache`：先查 Redis Hash `sys:cache:menuForm:{tenantId}::menuForm`（field=menuCode），miss 再查 `sys_menu_form_column WHERE menu_code=? AND tenant_id=CacheTenantUtils.getTenantId()`；查不到即返回空 → `restricted=false`；
+- 根因：tenant_id 写入 `'10002'`（当时误判默认租户，实际是脚手架 SQL 里旧租户的残留值）；而 admin 用户（sys_user.id='1'）tenant_id='10000'，`DEFAULT_TENANT_ID="10000"`，sys_tenant 全部记录 tenant_id 列也是 '10000'；
+- 隐藏性来源：① 多租户插件 IGNORE_TABLES 已忽略 `sys_menu_form_column`，不会被自动拼租户条件，租户匹配完全靠手写 `.eq(tenantId)`，配置错值无任何报错；② DML 执行成功、菜单存在、建模列齐全，所有静态检查都绿灯；③ "未绑定"是设计上的正常回退（前端 console.error 一行红字），不报错；
+- 交叉验证方法：F12 控制台看 `[ProTable][pageSchema] 接口原始返回` 的 `restricted` 与 `formsCount`——false/0 即绑定未命中；
+- 附带发现：直接执行 SQL 不走后端 saveBinds，不会触发 `evictByMenuCode` 清缓存；若之前曾命中过绑定，Redis 里有旧值，改库后必须清缓存才生效。
 
 ### Suggested Action
 
-1. 鍐欎换浣曞惈 tenant_id 鐨?DML 鍓嶅厛鏌ュ綋鍓嶇櫥褰曡处鍙风鎴凤細`SELECT login_name, tenant_id FROM sys_user WHERE login_name='<鐧诲綍鍚?'`锛屼笉瑕佸嚟"榛樿绉熸埛"鍗拌薄鍐欐锛?
-2. 濂戠害鏈敓鏁堟爣鍑嗘帓鏌ュ簭锛欶12 鐪?restricted 鈫?鏌?`sys_menu_form_column`锛坢enu_code/tenant_id/del_flag锛夆啋 鏌ョ櫥褰曠敤鎴风鎴?鈫?娓?Redis `sys:cache:menuForm:*`锛?
-3. 缁曡繃 SQL 鐩存敼搴撴椂璁板緱鍚屾娓呯紦瀛橈紙redis-cli DEL 鎴栭噸鍚悗绔級锛屽惁鍒欐棫缂撳瓨缁х画鍛戒腑锛?
-4. 寤烘ā涓夎〃锛坰ys_model_table/column/query锛夊湪澶氱鎴锋彃浠跺拷鐣ュ悕鍗曢噷锛屽彧鏈?sys_menu_form_column 鏈夋墜鍐欑鎴疯繃婊も€斺€旇繖鏄敮涓€鐨勭鎴锋晱鎰熺偣銆?
+1. 写任何含 tenant_id 的 DML 前先查当前登录账号租户：`SELECT login_name, tenant_id FROM sys_user WHERE login_name='<登录名>'`，不要凭"默认租户"印象写死；
+2. 契约未生效标准排查序：F12 看 restricted → 查 `sys_menu_form_column`（menu_code/tenant_id/del_flag）→ 查登录用户租户 → 清 Redis `sys:cache:menuForm:*`；
+3. 绕过 SQL 直改库时记得同步清缓存（redis-cli DEL 或重启后端），否则旧缓存继续命中；
+4. 建模三表（sys_model_table/column/query）在多租户插件忽略名单里，只有 sys_menu_form_column 有手写租户过滤——这是唯一的租户敏感点。
 
 ### Resolution
 
-2026-08-31锛? 浠借〃鍗曟ā鍨?DML 鐨?tenant_id 缁熶竴淇涓?'10000'锛? 涓?md 椤?+ plm/bi/scm鍟嗗搧璁㈠崟瑙勫垝鍚屾壒娆★級锛屽瓨閲忓簱 UPDATE + 娓?Redis 缂撳瓨鍚庡绾︾敓鏁堛€傞」鐩晶缁忛獙宸插悓姝?agent memory銆?
+2026-08-31：9 份表单模型 DML 的 tenant_id 统一修正为 '10000'（7 个 md 页 + plm/bi/scm 商品订单规划同批次），存量库 UPDATE + 清 Redis 缓存后契约生效。项目侧经验已同步 agent memory。
 
 See Also: ERR-20260831-008, PB-20260825-001
 
@@ -994,3 +994,30 @@ AI 生成的测试用例 / 自动化脚本引用了系统里不存在的自造�
 2026-09-09：fingerprint-browser `src/main/proxy/testEgress.ts` 默认双源改为 `api.mir6.com/api/ip_json`（首选，直接给 ISO 码）+ `myip.ipip.net/json`（备选，中文国名映射 ISO），lint 通过，doc/tasks/04-proxy.md 同步更新。
 ---
 
+
+## [ERR-20260918-001] 数据库 MCP 工具里 START TRANSACTION 不提交：同连接自证成功，外部连接全看不见
+
+**Logged**: 2026-09-18 | **Status**: resolved | **Tags**: mcp, mysql, transaction, cache-rebuild, false-positive
+
+### Summary
+
+通过 MCP 的 execute_query 工具执行 `START TRANSACTION` 后跑一批 INSERT/UPDATE，未显式 COMMIT：MCP 侧 SELECT 验证「全部就绪」是假象（同一连接能读到自己未提交的写入），应用进程（另一条连接）与它触发的缓存重建完全看不到这批数据——刷新接口返回成功、缓存里却始终没有新字典。
+
+### Details
+
+- 现象链：MCP 逐条执行 DML → MCP SELECT 核对全部生效 → 调应用的缓存刷新接口返回「成功」→ 直连 Redis 核对缓存字段仍缺失 → 再查库（MCP）数据「在」；
+- 根因：MCP SQL 工具底层持有单条（池化）连接，`START TRANSACTION` 后自动提交被关闭，事务一直挂着；验证用的 SELECT 走同一条连接，读到的是本事务未提交快照；应用与缓存重建走别的连接，被隔离在事务外。凡是「写入方连接」与「消费方连接」分离的架构（应用 + MCP 工具、双客户端）都会踩；
+- 二级坑：事务未提交期间跑的缓存重建被「成功」返回值掩盖——重建逻辑读库拿不到未提交行，静默产出不含新数据的缓存，与刷新成功形成矛盾信号，极易误判为「缓存层还有一层没刷」；
+- 辅助观察（未深究根因）：该 MCP 对 `INSERT ... VALUES ((SELECT ...))` 带子查询的多行写曾两次报 Query inactivity timeout，改两步（先 SELECT 出主键字面量，再单行 INSERT）立即可用；MCP 写大 SQL 超时不一定是库的问题，先拆小再怀疑锁。
+
+### Suggested Action
+
+1. 逐条式 MCP SQL 工具不要主动发 `START TRANSACTION`：依赖每条语句的自动提交 + 脚本幂等（DELETE+INSERT）保证原子性替代；
+2. 若已发出事务语句，DML 完成后立即显式 `COMMIT`，再触发任何依赖该数据的动作（缓存重建 / 应用重启 / 汇报完成）；
+3. 跨连接可见性验证的正确姿势：让「另一个连接」消费——触发应用的缓存重建接口并核对缓存内容，或用独立脚本直连数据库查询；同连接 SELECT 自证无意义；
+4. 「刷新成功但缓存没有」先怀疑数据可见性（未提交事务 / 连了不同库 / 租户过滤），再怀疑缓存链路。
+
+### Resolution
+
+2026-09-18：显式 COMMIT 后重跑缓存刷新接口，Redis 字典缓存立即出现新条目，应用接口返回的查询项配置同步更新为预期形态，整链路验证通过。
+---
